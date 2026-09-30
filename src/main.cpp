@@ -13,8 +13,8 @@ int main(int argc, char *argv[])
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 
     QApplication app(argc, argv);
-    QApplication::setApplicationName(QStringLiteral("LanIPScanner"));
-    QApplication::setApplicationVersion(QStringLiteral("1.5-beta3"));
+    QApplication::setApplicationName(QStringLiteral("NETScratch"));
+    QApplication::setApplicationVersion(QStringLiteral("2.0-beta"));
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/app.ico")));
     app.setFont(QFont(QStringLiteral("Microsoft YaHei"), 9));
 

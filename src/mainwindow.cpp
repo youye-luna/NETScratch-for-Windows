@@ -192,6 +192,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_scanner = new Scanner(this);
     m_scanner->setMaxParallelism(settings.scanThreads);
+    m_scanner->setIpv6Enabled(settings.ipv6Enabled);
 
     connect(m_scanner, &Scanner::scanProgress, this, &MainWindow::onScanProgress);
     connect(m_scanner, &Scanner::scanCompleted, this, &MainWindow::onScanCompleted);
@@ -534,6 +535,17 @@ void MainWindow::switchToPage(int page)
     if (m_stack == nullptr)
         return;
 
+    // 从设置页切走时，若有未保存的更改先弹窗询问；用户取消则留在设置页
+    if (page != PageSettings && m_stack->currentIndex() == PageSettings
+        && m_pageSettings != nullptr && !m_pageSettings->confirmLeave()) {
+        // 导航按钮是 checkable 的，点击时已被勾上，取消切换要把勾选还原回当前页
+        const int current = m_stack->currentIndex();
+        m_navHome->setChecked(current == PageHome);
+        m_navHistory->setChecked(current == PageHistory);
+        m_navSettings->setChecked(current == PageSettings);
+        return;
+    }
+
     m_stack->setCurrentIndex(page);
     m_navHome->setChecked(page == PageHome);
     m_navHistory->setChecked(page == PageHistory);
@@ -700,7 +712,7 @@ bool MainWindow::exportToCsv(const QString &filePath, QString *errorMessage)
     QTextStream out(&file);
     out.setCodec("UTF-8");
     out.setGenerateByteOrderMark(true);
-    out << Lang::get(QStringLiteral("CsvHeader")) << "\r\n";
+    out << Lang::get(QStringLiteral("CsvExportHeader")) << "\r\n";
 
     for (int i = 0; i < m_tabControlResults->count(); ++i)
     {
@@ -716,9 +728,11 @@ bool MainWindow::exportToCsv(const QString &filePath, QString *errorMessage)
         const QList<QStringList> rows = panel->getRows();
         for (const QStringList &row : rows)
         {
+            // 8 列：网段 + 表格前 5 列（含 IPv6，关闭时为横杠）+ 补回的 DHCP / 状态
             QStringList fields;
-            fields.reserve(6);
-            for (int column = 0; column < 6; ++column)
+            fields.reserve(8);
+            fields.append(escapeCsvField(subnet));
+            for (int column = 0; column < 7; ++column)
                 fields.append(escapeCsvField(column < row.size() ? row.at(column) : QString()));
             out << fields.join(QLatin1Char(',')) << "\r\n";
         }
@@ -882,6 +896,14 @@ void MainWindow::onSettingsSaved()
     const AppSettings settings = AppSettings::load();
     Lang::setCurrent(settings.language);
     m_scanner->setMaxParallelism(settings.scanThreads);
+    m_scanner->setIpv6Enabled(settings.ipv6Enabled);
+    // 已打开的结果页签同步 IPv6 列的显示与导出行为
+    for (int i = 0; i < m_tabControlResults->count(); ++i)
+    {
+        if (SubnetResultPanel *panel = qobject_cast<SubnetResultPanel *>(
+                m_tabControlResults->widget(i)))
+            panel->setIpv6Visible(settings.ipv6Enabled);
+    }
     applyLanguage();
 }
 

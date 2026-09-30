@@ -35,6 +35,26 @@ QHash<QString, QString> readArpTable(int timeoutMs = 1500);
 /// arp -a <ip> 单条查询，失败返回空
 QString queryArpEntry(const QString &ip, int timeoutMs = 1000);
 
+/// MAC 归一化为 AA-BB-CC-DD-EE-FF（大写），非法返回空
+QString formatMac(const QString &raw);
+
+/// 本机网卡（名称 / IPv6 接口索引 / IPv4），用于定位扫描网段所在网卡
+struct LocalInterface
+{
+    QString name;   ///< 网卡友好名称
+    int index = -1; ///< IPv6 接口索引（ping -6 ... %index 使用）
+    QString ipv4;   ///< 该网卡第一个非回环 IPv4
+};
+
+/// 枚举本机已启用且配置了 IPv4 的网卡
+QVector<LocalInterface> localInterfaces();
+
+/// 向 ff02::1 发一次 ICMPv6 回显，促使系统补齐 NDP 邻居表
+void primeIpv6Neighbors(int interfaceIndex);
+
+/// IPv6 邻居表：MAC(AA-BB-CC-DD-EE-FF 大写) -> 链路本地 fe80:: 地址
+QHash<QString, QString> readIpv6Neighbors(int timeoutMs = 3000);
+
 /// 本机物理网卡 MAC（AA-BB-CC-DD-EE-FF 大写），失败返回空
 QString localMacAddress();
 

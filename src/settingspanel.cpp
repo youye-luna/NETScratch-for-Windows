@@ -24,13 +24,14 @@
 
 #include "lang.h"
 #include "scanhistory.h"
+#include "toggleswitch.h"
 #include "uistyle.h"
 
 namespace {
 // 设置内容列的最小宽度与固定高度（列本身无背景无边框，靠左排列）
 // 宽度按「关于」区三列并排所需的最小尺寸取定，实际宽度随窗口拉伸。
 const int kContentWidth = 710;
-const int kContentHeight = 710;
+const int kContentHeight = 740;
 
 // 设置页整体放大系数：字号与间距一起放大，保持版面比例不变
 constexpr double kScale = 1.09;
@@ -49,10 +50,9 @@ const int kAboutLogoWidth = 176;   // 左列宽度，按版权文案实测取定
 const int kAboutMinGap = S(20);    // 三列之间的最小间距
 
 // 「关于」区的垂直布局（设计稿坐标）
-const int kAboutLineTopY = S(510);       // 上分隔线（仅保留这一条）
-const int kAboutBlockTop = S(530);       // 中/右两列顶部
+const int kAboutLineTopY = S(540);       // 上分隔线（仅保留这一条）
+const int kAboutBlockTop = S(560);       // 中/右两列顶部
 const int kAboutNameHeight = S(30);      // 应用名行高
-const int kAboutTitleHeight = S(24);     // 副标题行高
 const int kAboutVersionHeight = S(22);   // 版本号行高
 const int kAboutCopyrightHeight = S(22); // 版权行高
 const int kAboutFeaturesHeight = S(88);  // 功能列表块高度
@@ -336,15 +336,27 @@ SettingsPanel::SettingsPanel(QWidget *parent)
     m_lblHint->setFont(scaledYaHei(8));
     m_lblHint->setStyleSheet(QStringLiteral("color: #8a9099;"));
 
+    // IPv6 显示开关：iOS 样式滑动开关，位于线程数说明下方，
+    // 标签居左与「扫描线程数」等行对齐，开关在控件列
+    m_lblIpv6 = new QLabel(Lang::get(QStringLiteral("Ipv6Toggle")), m_content);
+    m_lblIpv6->move(S(20), S(250));
+    m_lblIpv6->adjustSize();
+    m_lblIpv6->setFont(scaledLabelFont());
+    m_lblIpv6->setStyleSheet(QStringLiteral("color: #1f2329;"));
+
+    m_swIpv6 = new ToggleSwitch(m_content);
+    m_swIpv6->setGeometry(S(150), S(246), S(46), S(26));
+    m_swIpv6->setChecked(m_settings.ipv6Enabled);
+
     // ------------------------------------------------------------ 历史记录设置
     // 分区标题，下辖「数据保存时长」与「保存范围」两个子分组
     m_lblHistorySection =
-        makeSectionTitle(m_content, Lang::get(QStringLiteral("HistorySettings")), 258);
+        makeSectionTitle(m_content, Lang::get(QStringLiteral("HistorySettings")), 288);
 
     // ------------------------------------------------------------ 数据保存时长
     // 三个互斥选项：按时间保存 / 按数量保存 / 永不清除（同一父控件自动互斥）
     m_groupMethod = new QGroupBox(Lang::get(QStringLiteral("SaveMethodGroup")), m_content);
-    m_groupMethod->setGeometry(S(15), S(282), S(430), S(68));
+    m_groupMethod->setGeometry(S(15), S(312), S(430), S(68));
     m_groupMethod->setFont(scaledYaHei(9, true));
 
     m_radioByTime = makeRadio(m_groupMethod, Lang::get(QStringLiteral("SaveByTime")), S(5), S(32));
@@ -353,7 +365,7 @@ SettingsPanel::SettingsPanel(QWidget *parent)
 
     // ------------------------------------------------------------ 保存范围
     m_groupRange = new QGroupBox(Lang::get(QStringLiteral("SaveRangeGroup")), m_content);
-    m_groupRange->setGeometry(S(15), S(356), S(430), S(124));
+    m_groupRange->setGeometry(S(15), S(386), S(430), S(124));
     m_groupRange->setFont(scaledYaHei(9, true));
 
     // 时间范围选项（独立容器，避免与数量选项互相排斥）
@@ -403,14 +415,11 @@ SettingsPanel::SettingsPanel(QWidget *parent)
     // 三列的横坐标在 layoutAbout() 里按实际内容宽度算，因此这里只给初始尺寸。
     QFont aboutNameFont(QStringLiteral("Segoe UI Semibold"), qRound(17 * kScale));
     aboutNameFont.setBold(true);
-    QFont aboutTitleFont = scaledYaHei(11);
     QFont aboutVersionFont(QStringLiteral("Microsoft YaHei"), qRound(9.5 * kScale));
     QFont aboutSmallFont(QStringLiteral("Microsoft YaHei"), qRound(8.5 * kScale));
 
     m_lblAppName = makeInfoLabel(m_content, aboutNameFont, kAboutNameColor, kAboutLeft,
                                  kAboutBlockTop, kAboutLogoWidth, kAboutNameHeight);
-    m_lblAppTitle = makeInfoLabel(m_content, aboutTitleFont, kAboutTitleColor, kAboutLeft,
-                                  kAboutBlockTop, kAboutLogoWidth, kAboutTitleHeight);
     m_lblVersion = makeInfoLabel(m_content, aboutVersionFont, kAboutVersionColor, kAboutLeft,
                                  kAboutBlockTop, kAboutLogoWidth, kAboutVersionHeight);
     m_lblCopyright = makeInfoLabel(m_content, aboutSmallFont, kAboutCopyrightColor, kAboutLeft,
@@ -436,19 +445,11 @@ SettingsPanel::SettingsPanel(QWidget *parent)
 
     // 「按时间保存 / 按数量保存 / 永不清除」三选一。
     // 选中「永不清除」时整块隐藏「保存范围」，并让「关于」区随之上移，
-    // 因此这里必须等「关于」区控件全部建好之后再挂信号、刷新可见性。
-    if (m_settings.historySaveMode == HistorySaveMode::ByCount) {
-        m_radioByCount->setChecked(true);
-    } else if (m_settings.historySaveDays == 0) {
-        m_radioNever->setChecked(true);
-    } else {
-        m_radioByTime->setChecked(true);
-    }
-
+    // 因此这里必须等「关于」区控件全部建好之后再挂信号、回滚/初始化控件。
     connect(m_radioByTime, &QRadioButton::toggled, this, &SettingsPanel::updateRangeVisibility);
     connect(m_radioByCount, &QRadioButton::toggled, this, &SettingsPanel::updateRangeVisibility);
     connect(m_radioNever, &QRadioButton::toggled, this, &SettingsPanel::updateRangeVisibility);
-    updateRangeVisibility();
+    syncFromSettings();
 }
 
 void SettingsPanel::layoutAbout()
@@ -487,14 +488,11 @@ void SettingsPanel::layoutAbout()
     // 唯一的分隔线横跨整个内容宽度
     m_aboutLineTop->setGeometry(kAboutLeft, lineTopY, span, 1);
 
-    // 左列四行叠放，整体与中/右两列垂直居中
-    const int leftStack =
-        kAboutNameHeight + kAboutTitleHeight + kAboutVersionHeight + kAboutCopyrightHeight;
+    // 左列三行叠放，整体与中/右两列垂直居中
+    const int leftStack = kAboutNameHeight + kAboutVersionHeight + kAboutCopyrightHeight;
     int y = blockTop + kAboutFeaturesHeight / 2 - leftStack / 2;
     m_lblAppName->setGeometry(kAboutLeft, y, kAboutLogoWidth, kAboutNameHeight);
     y += kAboutNameHeight;
-    m_lblAppTitle->setGeometry(kAboutLeft, y, kAboutLogoWidth, kAboutTitleHeight);
-    y += kAboutTitleHeight;
     m_lblVersion->setGeometry(kAboutLeft, y, kAboutLogoWidth, kAboutVersionHeight);
     y += kAboutVersionHeight;
     m_lblCopyright->setGeometry(kAboutLeft, y, kAboutLogoWidth, kAboutCopyrightHeight);
@@ -518,8 +516,7 @@ bool SettingsPanel::eventFilter(QObject *watched, QEvent *event)
 
 void SettingsPanel::refreshAboutText()
 {
-    m_lblAppName->setText(QStringLiteral("LanIPScanner"));
-    m_lblAppTitle->setText(Lang::get(QStringLiteral("FormTitle")));
+    m_lblAppName->setText(QStringLiteral("NETScratch"));
     m_lblVersion->setText(
         Lang::fmt(QStringLiteral("AboutVersion"), QApplication::applicationVersion()));
 
@@ -563,6 +560,8 @@ void SettingsPanel::applyLanguage()
     m_lblThreads->setText(Lang::get(QStringLiteral("ThreadsLabel")));
     m_lblThreads->adjustSize();
     m_lblHint->setText(Lang::get(QStringLiteral("ThreadsHint")));
+    m_lblIpv6->setText(Lang::get(QStringLiteral("Ipv6Toggle")));
+    m_lblIpv6->adjustSize();
 
     m_lblHistorySection->setText(Lang::get(QStringLiteral("HistorySettings")));
 
@@ -647,37 +646,107 @@ void SettingsPanel::updateRangeVisibility()
     layoutAbout();
 }
 
-void SettingsPanel::applySaveConfig()
+void SettingsPanel::collectFromWidgets(AppSettings &out) const
 {
     // 语言、时间格式与线程数随「保存设置」一并写入配置
-    m_settings.language = languageParse(m_comboLanguage->currentText());
-    m_settings.scanThreads = m_numThreads->value();
-    m_settings.dateFormat = m_comboDateFormat->currentData().toString();
-    m_settings.timeFormat = m_comboTimeFormat->currentData().toString();
+    out.language = languageParse(m_comboLanguage->currentText());
+    out.scanThreads = m_numThreads->value();
+    out.ipv6Enabled = m_swIpv6->isChecked();
+    out.dateFormat = m_comboDateFormat->currentData().toString();
+    out.timeFormat = m_comboTimeFormat->currentData().toString();
 
     if (m_radioByCount->isChecked()) {
-        m_settings.historySaveMode = HistorySaveMode::ByCount;
+        out.historySaveMode = HistorySaveMode::ByCount;
         if (m_radioCount30->isChecked())
-            m_settings.historySaveMaxRecords = 30;
+            out.historySaveMaxRecords = 30;
         else if (m_radioCount60->isChecked())
-            m_settings.historySaveMaxRecords = 60;
+            out.historySaveMaxRecords = 60;
         else if (m_radioCount90->isChecked())
-            m_settings.historySaveMaxRecords = 90;
+            out.historySaveMaxRecords = 90;
         else
-            m_settings.historySaveMaxRecords = 100;
+            out.historySaveMaxRecords = 100;
     } else {
-        m_settings.historySaveMode = HistorySaveMode::ByTime;
+        out.historySaveMode = HistorySaveMode::ByTime;
         if (m_radioNever->isChecked())
-            m_settings.historySaveDays = 0; // 永不清除
+            out.historySaveDays = 0; // 永不清除
         else if (m_radioDays14->isChecked())
-            m_settings.historySaveDays = 14;
+            out.historySaveDays = 14;
         else if (m_radioDaysHalf->isChecked())
-            m_settings.historySaveDays = 15;
+            out.historySaveDays = 15;
         else if (m_radioDaysMonth->isChecked())
-            m_settings.historySaveDays = 30;
+            out.historySaveDays = 30;
         else if (m_radioDaysYear->isChecked())
-            m_settings.historySaveDays = 365;
+            out.historySaveDays = 365;
         else
-            m_settings.historySaveDays = m_numCustomDays->value(); // 自定义天数
+            out.historySaveDays = m_numCustomDays->value(); // 自定义天数
     }
+}
+
+void SettingsPanel::applySaveConfig()
+{
+    collectFromWidgets(m_settings);
+}
+
+bool SettingsPanel::hasUnsavedChanges() const
+{
+    AppSettings pending = m_settings;
+    collectFromWidgets(pending);
+    return pending != m_settings;
+}
+
+void SettingsPanel::syncFromSettings()
+{
+    m_comboLanguage->setCurrentIndex(
+        m_comboLanguage->findText(languageDisplay(m_settings.language)));
+    fillFormatCombo(m_comboDateFormat, AppSettings::supportedDateFormats(), m_settings.dateFormat,
+                    true);
+    fillFormatCombo(m_comboTimeFormat, AppSettings::supportedTimeFormats(), m_settings.timeFormat,
+                    false);
+    m_numThreads->setValue(qBound(1, m_settings.scanThreads, 100));
+    m_swIpv6->setChecked(m_settings.ipv6Enabled);
+
+    if (m_settings.historySaveMode == HistorySaveMode::ByCount) {
+        m_radioByCount->setChecked(true);
+    } else if (m_settings.historySaveDays == 0) {
+        m_radioNever->setChecked(true);
+    } else {
+        m_radioByTime->setChecked(true);
+    }
+    initRangeSelection();
+    updateRangeVisibility();
+}
+
+bool SettingsPanel::confirmLeave()
+{
+    if (!hasUnsavedChanges())
+        return true;
+
+    QMessageBox box(this);
+    box.setWindowTitle(Lang::get(QStringLiteral("UnsavedChangesTitle")));
+    box.setText(Lang::get(QStringLiteral("UnsavedChangesText")));
+    box.setIcon(QMessageBox::Question);
+    QPushButton *saveButton =
+        box.addButton(Lang::get(QStringLiteral("SaveSettings")), QMessageBox::AcceptRole);
+    box.addButton(Lang::get(QStringLiteral("DiscardChanges")), QMessageBox::DestructiveRole);
+    QPushButton *cancelButton =
+        box.addButton(Lang::get(QStringLiteral("Cancel")), QMessageBox::RejectRole);
+    box.setDefaultButton(saveButton);
+    box.exec();
+
+    QAbstractButton *clicked = box.clickedButton();
+    if (clicked == cancelButton)
+        return false; // 取消：留在设置页
+
+    if (clicked == saveButton) {
+        // 与「保存设置」按钮走同一条保存路径，但不重复弹「已应用」提示
+        applySaveConfig();
+        m_settings.save();
+        ScanHistoryStore::prune();
+        emit settingsSaved();
+        return true;
+    }
+
+    // 不保存：把控件回滚到已保存的配置，避免残留的半改动状态再次触发提示
+    syncFromSettings();
+    return true;
 }

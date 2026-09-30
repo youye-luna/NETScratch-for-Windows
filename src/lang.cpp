@@ -16,7 +16,7 @@ struct TextEntry
 
 // 主窗口
 const TextEntry kZh[] = {
-    {"FormTitle", "局域网设备扫描工具"},
+    {"FormTitle", "NETScratch"},
     {"Home", "主页"},
     {"ScanRangeTitle", "搜索范围设置"},
     {"StartIp", "起始IP:"},
@@ -68,16 +68,19 @@ const TextEntry kZh[] = {
     {"ExportSuccess", "数据已成功导出到:\n{0}"},
     {"ExportFailed", "导出失败: {0}"},
     {"CsvHeader", "网段,IP地址,MAC地址,主机名,延迟(ms),DHCP服务器,状态"},
+    {"CsvExportHeader", "网段,IP地址,IPv6地址,MAC地址,主机名,延迟(ms),DHCP服务器,状态"},
 
     // 结果表格
-    {"ColIp", "IP地址"},
+    {"ColIp", "IPv4地址"},
     {"ColMac", "MAC地址"},
     {"ColHost", "主机名"},
+    {"ColIpv6", "IPv6地址"},
     {"ColPing", "延迟(ms)"},
     {"ColDhcp", "DHCP服务器"},
     {"ColCamera", "摄像头"},
     {"ColDeviceType", "设备类型"},
     {"ColStatus", "状态"},
+    {"Ipv6Toggle", "显示IPv6地址:"},
     {"Online", "在线"},
     {"NoDevice", "无设备"},
     {"Yes", "是"},
@@ -132,6 +135,9 @@ const TextEntry kZh[] = {
     {"Range100", "近100个"},
     {"SaveSettings", "保存设置"},
     {"SaveConfigSuccess", "保存配置已应用！"},
+    {"UnsavedChangesTitle", "未保存的更改"},
+    {"UnsavedChangesText", "设置项已更改但尚未保存，要保存吗？"},
+    {"DiscardChanges", "不保存"},
 
     // 关于
     {"About", "关于"},
@@ -165,7 +171,7 @@ const TextEntry kZh[] = {
 };
 
 const TextEntry kEn[] = {
-    {"FormTitle", "LAN Device Scanner"},
+    {"FormTitle", "NETScratch"},
     {"Home", "Home"},
     {"ScanRangeTitle", "Scan Range Settings"},
     {"StartIp", "Start IP:"},
@@ -214,15 +220,19 @@ const TextEntry kEn[] = {
     {"ExportSuccess", "Data has been exported to:\n{0}"},
     {"ExportFailed", "Export failed: {0}"},
     {"CsvHeader", "Subnet,IP Address,MAC Address,Host Name,Latency(ms),DHCP Server,Status"},
+    {"CsvExportHeader",
+     "Subnet,IP Address,IPv6 Address,MAC Address,Host Name,Ping(ms),DHCP Server,Status"},
 
-    {"ColIp", "IP Address"},
+    {"ColIp", "IPv4 Address"},
     {"ColMac", "MAC Address"},
     {"ColHost", "Host Name"},
-    {"ColPing", "Latency(ms)"},
+    {"ColIpv6", "IPv6 Address"},
+    {"ColPing", "Ping(ms)"},
     {"ColDhcp", "DHCP Server"},
     {"ColCamera", "Camera"},
     {"ColDeviceType", "Device type"},
     {"ColStatus", "Status"},
+    {"Ipv6Toggle", "Show IPv6 addresses:"},
     {"Online", "Online"},
     {"NoDevice", "No device"},
     {"Yes", "Yes"},
@@ -271,6 +281,9 @@ const TextEntry kEn[] = {
     {"Range100", "Last 100 records"},
     {"SaveSettings", "Save Settings"},
     {"SaveConfigSuccess", "Save configuration applied!"},
+    {"UnsavedChangesTitle", "Unsaved Changes"},
+    {"UnsavedChangesText", "Settings have been changed but not saved. Save them?"},
+    {"DiscardChanges", "Don't Save"},
 
     {"About", "About"},
     {"AboutTitle", "About"},
@@ -302,7 +315,7 @@ const TextEntry kEn[] = {
 };
 
 const TextEntry kZhTw[] = {
-    {"FormTitle", "區域網路裝置掃描工具"},
+    {"FormTitle", "NETScratch"},
     {"Home", "首頁"},
     {"ScanRangeTitle", "掃描範圍設定"},
     {"StartIp", "起始IP:"},
@@ -351,15 +364,18 @@ const TextEntry kZhTw[] = {
     {"ExportSuccess", "資料已成功匯出到:\n{0}"},
     {"ExportFailed", "匯出失敗: {0}"},
     {"CsvHeader", "網段,IP位址,MAC位址,主機名稱,延遲(ms),DHCP伺服器,狀態"},
+    {"CsvExportHeader", "網段,IP位址,IPv6位址,MAC位址,主機名稱,延遲(ms),DHCP伺服器,狀態"},
 
-    {"ColIp", "IP位址"},
+    {"ColIp", "IPv4位址"},
     {"ColMac", "MAC位址"},
     {"ColHost", "主機名稱"},
+    {"ColIpv6", "IPv6位址"},
     {"ColPing", "延遲(ms)"},
     {"ColDhcp", "DHCP伺服器"},
     {"ColCamera", "攝影機"},
     {"ColDeviceType", "裝置類型"},
     {"ColStatus", "狀態"},
+    {"Ipv6Toggle", "顯示IPv6位址:"},
     {"Online", "線上"},
     {"NoDevice", "無裝置"},
     {"Yes", "是"},
@@ -408,6 +424,9 @@ const TextEntry kZhTw[] = {
     {"Range100", "近100個"},
     {"SaveSettings", "儲存設定"},
     {"SaveConfigSuccess", "儲存設定已套用！"},
+    {"UnsavedChangesTitle", "未儲存的變更"},
+    {"UnsavedChangesText", "設定項已變更但尚未儲存，要儲存嗎？"},
+    {"DiscardChanges", "不儲存"},
 
     {"About", "關於"},
     {"AboutTitle", "關於"},
@@ -439,7 +458,7 @@ const TextEntry kZhTw[] = {
 };
 
 const TextEntry kZhHk[] = {
-    {"FormTitle", "區域網絡裝置掃描工具"},
+    {"FormTitle", "NETScratch"},
     {"Home", "首頁"},
     {"ScanRangeTitle", "掃描範圍設定"},
     {"StartIp", "起始IP:"},
@@ -488,15 +507,18 @@ const TextEntry kZhHk[] = {
     {"ExportSuccess", "資料已成功匯出到:\n{0}"},
     {"ExportFailed", "匯出失敗: {0}"},
     {"CsvHeader", "網段,IP位址,MAC位址,主機名稱,延遲(ms),DHCP伺服器,狀態"},
+    {"CsvExportHeader", "網段,IP位址,IPv6位址,MAC位址,主機名稱,延遲(ms),DHCP伺服器,狀態"},
 
-    {"ColIp", "IP位址"},
+    {"ColIp", "IPv4位址"},
     {"ColMac", "MAC位址"},
     {"ColHost", "主機名稱"},
+    {"ColIpv6", "IPv6位址"},
     {"ColPing", "延遲(ms)"},
     {"ColDhcp", "DHCP伺服器"},
     {"ColCamera", "攝影機"},
     {"ColDeviceType", "裝置類型"},
     {"ColStatus", "狀態"},
+    {"Ipv6Toggle", "顯示IPv6位址:"},
     {"Online", "線上"},
     {"NoDevice", "無裝置"},
     {"Yes", "是"},
@@ -545,6 +567,9 @@ const TextEntry kZhHk[] = {
     {"Range100", "近100個"},
     {"SaveSettings", "儲存設定"},
     {"SaveConfigSuccess", "儲存設定已套用！"},
+    {"UnsavedChangesTitle", "未儲存的變更"},
+    {"UnsavedChangesText", "設定項已變更但尚未儲存，要儲存嗎？"},
+    {"DiscardChanges", "不儲存"},
 
     {"About", "關於"},
     {"AboutTitle", "關於"},

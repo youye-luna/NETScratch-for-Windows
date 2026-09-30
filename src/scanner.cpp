@@ -90,11 +90,12 @@ QVector<NmapHost> confirmAliveHosts(const QVector<NmapHost> &hosts, int maxParal
 }
 } // namespace
 
-ScanWorker::ScanWorker(const QStringList &ipList, int maxParallelism,
+ScanWorker::ScanWorker(const QStringList &ipList, int maxParallelism, bool ipv6Enabled,
                        const QSharedPointer<ScanCancelToken> &token, QObject *parent)
     : QThread(parent)
     , m_ipList(ipList)
     , m_maxParallelism(qMax(1, maxParallelism))
+    , m_ipv6Enabled(ipv6Enabled)
     , m_token(token)
 {
 }
@@ -191,6 +192,20 @@ void ScanWorker::run()
         }
 
         applyArpResults(collected);
+
+        if (!m_token.isNull() && m_token->isCancelled())
+        {
+            emit cancelled();
+            return;
+        }
+
+        // 3.5) 提取 IPv6：先预热 NDP 邻居表（向 ff02::1 发回显），再按 MAC 回填
+        // IPv6 提取：仅在设置开启时预热邻居表并按 MAC 回填
+        if (m_ipv6Enabled)
+        {
+            prepareIpv6Neighbors();
+            applyIpv6Results(collected);
+        }
 
         if (!m_token.isNull() && m_token->isCancelled())
         {
@@ -334,6 +349,47 @@ void ScanWorker::applyArpResults(QVector<DhcpServerInfo> &results) const
         info.pingMs = fix.pingMs;
         info.responseTime = QDateTime::currentDateTime();
         results.append(info);
+    }
+}
+
+void ScanWorker::prepareIpv6Neighbors() const
+{
+    if (m_ipList.isEmpty())
+        return;
+
+    // 只预热与待扫网段同前缀的网卡，避免逐张网卡发组播造成额外耗时
+    const QStringList parts = m_ipList.first().split(QLatin1Char('.'));
+    if (parts.size() != 4)
+        return;
+    const QString prefix = QStringLiteral("%1.%2.%3.").arg(parts.at(0), parts.at(1), parts.at(2));
+
+    const QVector<NetUtils::LocalInterface> interfaces = NetUtils::localInterfaces();
+    for (const NetUtils::LocalInterface &iface : interfaces)
+    {
+        if (iface.index <= 0 || !iface.ipv4.startsWith(prefix))
+            continue;
+        NetUtils::primeIpv6Neighbors(iface.index);
+    }
+}
+
+void ScanWorker::applyIpv6Results(QVector<DhcpServerInfo> &results) const
+{
+    const QHash<QString, QString> neighbors = NetUtils::readIpv6Neighbors();
+    if (neighbors.isEmpty())
+        return;
+
+    for (DhcpServerInfo &info : results)
+    {
+        if (!info.isActive)
+            continue;
+
+        const QString mac = NetUtils::formatMac(info.macAddress);
+        if (mac.isEmpty())
+            continue;
+
+        const QString ipv6 = neighbors.value(mac);
+        if (!ipv6.isEmpty())
+            info.ipv6Address = ipv6;
     }
 }
 
@@ -485,7 +541,7 @@ bool Scanner::startIpRangeScan(const QString &startIp, const QString &endIp, QSt
 
     m_isScanning = true;
     m_token = QSharedPointer<ScanCancelToken>::create();
-    m_worker = new ScanWorker(ipList, m_maxParallelism, m_token, this);
+    m_worker = new ScanWorker(ipList, m_maxParallelism, m_ipv6Enabled, m_token, this);
 
     connect(m_worker, &ScanWorker::progressChanged, this, &Scanner::scanProgress, Qt::QueuedConnection);
     connect(m_worker, &ScanWorker::completed, this, &Scanner::scanCompleted, Qt::QueuedConnection);

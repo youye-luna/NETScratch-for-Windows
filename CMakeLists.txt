@@ -6,7 +6,7 @@ if(NOT CMAKE_RC_COMPILER AND EXISTS "J:/Qt/Tools/mingw810_64/bin/windres.exe")
     set(CMAKE_RC_COMPILER "J:/Qt/Tools/mingw810_64/bin/windres.exe" CACHE FILEPATH "" FORCE)
 endif()
 
-project(LanIPScanner VERSION 1.5 LANGUAGES CXX RC)
+project(NETScratch VERSION 2.0 LANGUAGES CXX RC)
 
 # app.rc 为 UTF-8 编码且含中文版本信息，需告知 windres 输入代码页，否则中文会乱码
 set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} --codepage=65001")
@@ -71,17 +71,20 @@ set(PROJECT_SOURCES
 
     src/uistyle.h
 
+    src/toggleswitch.h
+    src/toggleswitch.cpp
+
     src/mainwindow.h
     src/mainwindow.cpp
 )
 
-add_executable(LanIPScanner WIN32
+add_executable(NETScratch WIN32
     ${PROJECT_SOURCES}
     app.rc
     resources.qrc
 )
 
-target_link_libraries(LanIPScanner PRIVATE
+target_link_libraries(NETScratch PRIVATE
     Qt5::Widgets
     Qt5::Network
     Qt5::WinExtras
@@ -93,7 +96,14 @@ target_link_libraries(LanIPScanner PRIVATE
 # 主机发现由官方 nmap.exe 以子进程方式完成。nmap 使用 NPSL 许可（与 GPLv3 不兼容），
 # 按其许可要求把 nmap 自带的许可文件一并放入 release/nmap 内随附分发。
 set(NMAP_DIST_DIR "J:/nmap-dist/extracted" CACHE PATH "nmap 免安装发行目录")
-set(NMAP_VCRUNTIME_DIR "J:/nmap-dist/vcruntime32" CACHE PATH "nmap 依赖的 32 位 VC++ 运行库目录")
+# 必须是 Win7 可用的 32 位 VC++ 运行库（14.29 / VS2019 16.11 为最后一个支持 Win7 SP1 的版本）。
+# 14.3x 及以上版本会导入 Win8+ 的 GetSystemTimePreciseAsFileTime，导致 Win7 报
+# “无法定位程序输入点 ... 于动态链接库 KERNEL32.dll 上”。
+# 注意：这里是 CACHE 变量，修改默认值后需清理构建目录内的 CMakeCache.txt 才会生效。
+set(NMAP_VCRUNTIME_DIR "J:/nmap-dist/vcruntime32" CACHE PATH "nmap 依赖的 32 位 VC++ 运行库目录（Win7 兼容版 14.29）")
+# Win7 不自带 UCRT，需 app-local 随 nmap.exe 一同部署 ucrtbase.dll 与 api-ms-win-*-l1-1-0.dll
+# （取自 Windows SDK Redist\ucrt\DLLs\x86，10.0.10240，已确认不含 Win8+ 导入）
+set(NMAP_UCRT_DIR "J:/nmap-dist/ucrt32" CACHE PATH "nmap 依赖的 32 位 UCRT 运行库目录")
 
 set(NMAP_DEPLOY_COMMANDS)
 if(EXISTS "${NMAP_DIST_DIR}/nmap.exe")
@@ -123,6 +133,15 @@ if(EXISTS "${NMAP_DIST_DIR}/nmap.exe")
         COMMAND ${CMAKE_COMMAND} -E make_directory "${_NMAP_DST_DIR}"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${_NMAP_RUNTIME_FILES} "${_NMAP_DST_DIR}/")
+
+    # UCRT（ucrtbase.dll + api-ms-win-*-l1-1-0.dll，32 位）：Win7 无此组件，随 nmap.exe 同目录部署
+    if(EXISTS "${NMAP_UCRT_DIR}")
+        list(APPEND NMAP_DEPLOY_COMMANDS
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${NMAP_UCRT_DIR}" "${_NMAP_DST_DIR}")
+    else()
+        message(WARNING "未找到 ${NMAP_UCRT_DIR}，Win7 上 nmap 可能因缺少 UCRT 而无法运行")
+    endif()
 
     foreach(_nmap_dir scripts nselib licenses)
         if(EXISTS "${NMAP_DIST_DIR}/${_nmap_dir}")
@@ -162,7 +181,7 @@ set(MINGW_RUNTIME_DLLS
 add_custom_target(deploy
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/release"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_FILE:LanIPScanner>" "${CMAKE_SOURCE_DIR}/release/"
+            "$<TARGET_FILE:NETScratch>" "${CMAKE_SOURCE_DIR}/release/"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${QT_RUNTIME_DLLS} ${MINGW_RUNTIME_DLLS} "${CMAKE_SOURCE_DIR}/release/"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/release/platforms"
@@ -178,7 +197,7 @@ add_custom_target(deploy
             "${_QT_PLUGINS_DIR}/imageformats/qico.dll"
             "${CMAKE_SOURCE_DIR}/release/imageformats/"
     ${NMAP_DEPLOY_COMMANDS}
-    DEPENDS LanIPScanner
+    DEPENDS NETScratch
     VERBATIM
     COMMENT "部署到 release 目录（含 Qt 运行库、编译器运行库与 nmap）"
 )

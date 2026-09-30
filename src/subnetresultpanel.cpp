@@ -1,5 +1,6 @@
 #include "subnetresultpanel.h"
 
+#include "appsettings.h"
 #include "ipgridpanel.h"
 #include "lang.h"
 #include "uistyle.h"
@@ -29,17 +30,20 @@ namespace
 {
 const int kGridWidth = 480;
 
-/// 结果表格列数：IP / MAC / 主机名 / 延迟 / 设备类型
-const int kColumnCount = 5;
+/// 结果表格列数：IP / IPv6 / MAC / 主机名 / 延迟 / 设备类型
+const int kColumnCount = 6;
 
-/// 导出时取自表格的列数（设备类型列不整体参与导出）
-const int kExportSourceCount = 4;
+/// 导出时取自表格的列数（设备类型列不参与导出，IPv6 列关闭时导出为横杠）
+const int kExportSourceCount = 5;
 
-/// 导出用列数：取自表格的列 + DHCP 服务器列 + 状态列（CSV 格式固定为 7 列，含网段）
+/// 导出用列数：取自表格的列 + DHCP 服务器列 + 状态列（CSV 导出格式为 7 列数据，另加网段共 8 列）
 const int kExportColumnCount = kExportSourceCount + 2;
 
+/// 导出时取自表格的列号：IP / IPv6 / MAC / 主机名 / 延迟
+const int kExportColumns[kExportSourceCount] = {0, 1, 2, 3, 4};
+
 /// 结果表格中「设备类型」列的列号
-const int kDeviceTypeColumn = 4;
+const int kDeviceTypeColumn = 5;
 
 QColor dhcpColor() { return QColor(255, 138, 128); }
 QColor dhcpTextColor() { return QColor(211, 47, 47); }
@@ -66,8 +70,11 @@ QString deviceTypeText(const DhcpServerInfo &info)
 SubnetResultPanel::SubnetResultPanel(QWidget *parent)
     : QWidget(parent)
 {
+    m_ipv6Visible = AppSettings::load().ipv6Enabled;
+
     m_grid = new QTableWidget(this);
     initTable();
+    m_grid->setColumnHidden(1, !m_ipv6Visible);
 
     m_ipGrid = new IPGridPanel(this);
     m_ipGrid->setFixedWidth(kGridWidth);
@@ -98,6 +105,7 @@ void SubnetResultPanel::initTable()
     m_grid->setColumnCount(kColumnCount);
     m_grid->setHorizontalHeaderLabels(QStringList{
         Lang::get(QStringLiteral("ColIp")),
+        Lang::get(QStringLiteral("ColIpv6")),
         Lang::get(QStringLiteral("ColMac")),
         Lang::get(QStringLiteral("ColHost")),
         Lang::get(QStringLiteral("ColPing")),
@@ -124,13 +132,15 @@ void SubnetResultPanel::initTable()
     header->setFont(headerFont);
     header->setStyleSheet(UiStyle::tableHeaderStyle());
 
-    const int widths[kColumnCount] = {135, 150, 140, 70, 185};
+    // 列宽按最长内容预留：MAC 17 字符、IPv6 25 字符（fe80::1234:5678:9abc:def0）、
+    // 英文表头 Ping(ms) 粗体约 62px、设备类型 DHCP Server 粗体约 93px
+    const int widths[kColumnCount] = {108, 176, 140, 120, 64, 96};
     for (int i = 0; i < kColumnCount; ++i)
         m_grid->setColumnWidth(i, widths[i]);
 
-    // 主机名（第 3 列）吸收剩余宽度：表格左侧会被拉伸填满，
+    // 主机名（第 4 列）吸收剩余宽度：表格左侧会被拉伸填满，
     // 若每列都是固定宽度，右侧就会拖出一条与表格同色的空白带。
-    header->setSectionResizeMode(2, QHeaderView::Stretch);
+    header->setSectionResizeMode(3, QHeaderView::Stretch);
 
     m_grid->setStyleSheet(UiStyle::tableStyle());
     // 数据行比默认略高一点，读起来不挤
@@ -143,6 +153,12 @@ void SubnetResultPanel::initTable()
     palette.setColor(QPalette::Highlight, QColor(200, 220, 240));
     palette.setColor(QPalette::HighlightedText, Qt::black);
     m_grid->setPalette(palette);
+}
+
+void SubnetResultPanel::setIpv6Visible(bool visible)
+{
+    m_ipv6Visible = visible;
+    m_grid->setColumnHidden(1, !visible);
 }
 
 void SubnetResultPanel::populateData(const QVector<DhcpServerInfo> &devices)
@@ -162,6 +178,7 @@ void SubnetResultPanel::populateData(const QVector<DhcpServerInfo> &devices)
 
         const QStringList texts{
             info.ipAddress,
+            info.isActive && !info.ipv6Address.isEmpty() ? info.ipv6Address : QStringLiteral("-"),
             info.isActive ? info.macAddress : QStringLiteral("-"),
             info.isActive ? info.hostName : QStringLiteral("-"),
             pingText,
@@ -253,12 +270,15 @@ QList<QStringList> SubnetResultPanel::getRows() const
     {
         QStringList values;
         values.reserve(kExportColumnCount);
-        // 只取 IP / MAC / 主机名 / 延迟 前 4 列，设备类型列不整体参与导出
-        for (int column = 0; column < kExportSourceCount; ++column)
+        // 取 IP / IPv6 / MAC / 主机名 / 延迟 5 列，设备类型列不参与导出
+        for (int i = 0; i < kExportSourceCount; ++i)
         {
-            const QTableWidgetItem *item = m_grid->item(row, column);
+            const QTableWidgetItem *item = m_grid->item(row, kExportColumns[i]);
             values.append(item != nullptr ? item->text() : QString());
         }
+        // IPv6 显示关闭时该列整列填横杠
+        if (!m_ipv6Visible)
+            values[1] = QStringLiteral("-");
 
         // DHCP 服务器标记按设备信息补回，保持 CSV 的 7 列格式不变
         const bool isDhcp = row < m_rowInfos.size() && m_rowInfos.at(row).isDhcpServer;
@@ -279,6 +299,7 @@ void SubnetResultPanel::refreshLanguage()
 {
     m_grid->setHorizontalHeaderLabels(QStringList{
         Lang::get(QStringLiteral("ColIp")),
+        Lang::get(QStringLiteral("ColIpv6")),
         Lang::get(QStringLiteral("ColMac")),
         Lang::get(QStringLiteral("ColHost")),
         Lang::get(QStringLiteral("ColPing")),
@@ -324,6 +345,7 @@ void SubnetResultPanel::showDetailPreview()
     router.hostName = QStringLiteral("router.lan");
     router.isActive = true;
     router.isDhcpServer = true;
+    router.ipv6Address = QStringLiteral("fe80::3e84:6aff:fe11:2233");
     router.pingMs = 3;
 
     DhcpServerInfo camera;
@@ -347,11 +369,13 @@ void SubnetResultPanel::showDetailDialog(int row)
         return;
 
     const QTableWidgetItem *ipItem = m_grid->item(row, 0);
-    const QTableWidgetItem *macItem = m_grid->item(row, 1);
-    const QTableWidgetItem *hostItem = m_grid->item(row, 2);
+    const QTableWidgetItem *ipv6Item = m_grid->item(row, 1);
+    const QTableWidgetItem *macItem = m_grid->item(row, 2);
+    const QTableWidgetItem *hostItem = m_grid->item(row, 3);
     const QString ip = ipItem != nullptr ? ipItem->text() : QString();
     const QString mac = macItem != nullptr ? macItem->text() : QString();
     const QString host = hostItem != nullptr ? hostItem->text() : QString();
+    const QString ipv6 = ipv6Item != nullptr ? ipv6Item->text() : QString();
 
     bool isActive = false;
     bool isDhcp = false;
@@ -386,17 +410,20 @@ void SubnetResultPanel::showDetailDialog(int row)
         QString value;
         QColor color;
     };
-    const Field fields[5] = {
-        {Lang::get(QStringLiteral("FieldIp")), ip, UiStyle::textPrimaryColor()},
-        {Lang::get(QStringLiteral("FieldMac")), mac, UiStyle::textPrimaryColor()},
-        {Lang::get(QStringLiteral("FieldHost")), host, UiStyle::textPrimaryColor()},
-        {Lang::get(QStringLiteral("FieldPing")),
-         pingText,
-         pingText != QStringLiteral("-") ? QColor(46, 125, 50) : UiStyle::textSecondaryColor()},
-        {Lang::get(QStringLiteral("ColDeviceType")),
-         deviceType,
-         isCamera ? cameraColor() : (isDhcp ? dhcpTextColor() : UiStyle::textPrimaryColor())},
-    };
+    QList<Field> fields;
+    fields.append({Lang::get(QStringLiteral("FieldIp")), ip, UiStyle::textPrimaryColor()});
+    fields.append({Lang::get(QStringLiteral("FieldMac")), mac, UiStyle::textPrimaryColor()});
+    fields.append({Lang::get(QStringLiteral("FieldHost")), host, UiStyle::textPrimaryColor()});
+    if (m_ipv6Visible)
+        fields.append({Lang::get(QStringLiteral("ColIpv6")), ipv6, UiStyle::textPrimaryColor()});
+    fields.append({Lang::get(QStringLiteral("FieldPing")),
+                   pingText,
+                   pingText != QStringLiteral("-") ? QColor(46, 125, 50)
+                                                   : UiStyle::textSecondaryColor()});
+    fields.append({Lang::get(QStringLiteral("ColDeviceType")),
+                   deviceType,
+                   isCamera ? cameraColor()
+                            : (isDhcp ? dhcpTextColor() : UiStyle::textPrimaryColor())});
 
     // 非模态显示：详情窗口不阻塞主窗口，可边看详情边继续操作
     QDialog *dialog = new QDialog(window());
@@ -501,9 +528,9 @@ void SubnetResultPanel::showDetailDialog(int row)
     QFont valueFont = labelFont;
     valueFont.setBold(true);
 
-    for (int i = 0; i < 5; ++i)
+    for (int i = 0; i < fields.size(); ++i)
     {
-        const Field &field = fields[i];
+        const Field &field = fields.at(i);
 
         QWidget *rowWidget = new QWidget(infoCard);
         rowWidget->setFixedHeight(36);
@@ -527,7 +554,7 @@ void SubnetResultPanel::showDetailDialog(int row)
 
         rowsLayout->addWidget(rowWidget);
 
-        if (i != 4)
+        if (i != fields.size() - 1)
         {
             QWidget *lineHolder = new QWidget(infoCard);
             lineHolder->setFixedHeight(1);

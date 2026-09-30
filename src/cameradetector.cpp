@@ -298,7 +298,7 @@ QString probeRtsp(const QString &ip, const QVector<int> &openPorts)
 
         const QByteArray request = "OPTIONS rtsp://" + ip.toUtf8() + ":"
                                    + QByteArray::number(port)
-                                   + " RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: LanIPScanner\r\n\r\n";
+                                   + " RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: NETScratch\r\n\r\n";
         const QByteArray response = tcpExchange(ip, port, request, kExchangeBudgetMs);
         if (response.startsWith("RTSP/"))
             return QString::fromLatin1(response).toLower();

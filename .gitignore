@@ -3,7 +3,7 @@ build/
 release/
 *.exe
 *.zip
-installer/LanIPScanner.iss
+installer/NETScratch.iss
 
 ## IDE
 .vs/

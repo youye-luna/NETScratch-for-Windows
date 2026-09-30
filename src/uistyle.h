@@ -138,15 +138,17 @@ inline QString tableHeaderStyle()
         "}");
 }
 
-/// 表格通用样式：描边 + 浅灰网格线 + 单元格左右内边距。
+/// 表格通用样式：描边 + 浅灰网格线。
 /// 故意不给 ::item 设 background-color —— 否则会盖掉
 /// item->setBackground() 设置的交替行底色与非活跃行灰底。
+/// 同理也不能给 ::item 设 padding：只有被样式表绘制的单元格（即选中行）
+/// 才会走样式表、吃到 padding，未选中行会退回默认样式的边距，
+/// 结果选中时整行文字右移 8px 甚至被省略号截断。
 inline QString tableStyle()
 {
     return QStringLiteral(
         "QTableWidget { background-color: #ffffff; border: 1px solid #e6e8ec;"
         " gridline-color: #eef1f5; outline: none; }"
-        "QTableWidget::item { padding-left: 8px; padding-right: 8px; }"
         "QTableWidget::item:selected { background-color: #c8dcf0; color: #1f2329; }");
 }
 

@@ -118,12 +118,12 @@ QString formatMacAddress(const QString &raw)
     return pairs.join(QLatin1Char('-'));
 }
 
-/// 执行 arp 命令并返回标准输出（按系统本地编码解码）；超时或失败返回空
-QString runArpCommand(const QStringList &arguments, int timeoutMs)
+/// 执行外部命令并返回标准输出（按系统本地编码解码）；超时或失败返回空
+QString runSystemCommand(const QString &program, const QStringList &arguments, int timeoutMs)
 {
     QProcess process;
     process.setProcessChannelMode(QProcess::MergedChannels);
-    process.start(QStringLiteral("arp"), arguments, QIODevice::ReadOnly);
+    process.start(program, arguments, QIODevice::ReadOnly);
     if (!process.waitForStarted(500))
         return QString();
 
@@ -150,6 +150,12 @@ QString runArpCommand(const QStringList &arguments, int timeoutMs)
 
     output += process.readAll();
     return QString::fromLocal8Bit(output);
+}
+
+/// 执行 arp 命令并返回标准输出；超时或失败返回空
+QString runArpCommand(const QStringList &arguments, int timeoutMs)
+{
+    return runSystemCommand(QStringLiteral("arp"), arguments, timeoutMs);
 }
 
 /// arp -a / arp -a <ip> 输出的行分隔（含 "Interface: xxx --- 0x5" 之类的头部行，后续解析会过滤）
@@ -498,6 +504,126 @@ QString queryArpEntry(const QString &ip, int timeoutMs)
     }
 
     return QString();
+}
+
+QString formatMac(const QString &raw)
+{
+    return formatMacAddress(raw);
+}
+
+QVector<LocalInterface> localInterfaces()
+{
+    QVector<LocalInterface> interfaces;
+
+    ensureWinsock();
+
+    const ULONG flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER;
+
+    ULONG bufferSize = 0;
+    if (GetAdaptersAddresses(AF_UNSPEC, flags, nullptr, nullptr, &bufferSize) != ERROR_BUFFER_OVERFLOW)
+        return interfaces;
+    if (bufferSize == 0)
+        return interfaces;
+
+    QByteArray buffer(static_cast<int>(bufferSize), '\0');
+    IP_ADAPTER_ADDRESSES *addresses = reinterpret_cast<IP_ADAPTER_ADDRESSES *>(buffer.data());
+    if (GetAdaptersAddresses(AF_UNSPEC, flags, nullptr, addresses, &bufferSize) != NO_ERROR)
+        return interfaces;
+
+    for (IP_ADAPTER_ADDRESSES *adapter = addresses; adapter != nullptr; adapter = adapter->Next)
+    {
+        if (adapter->OperStatus != IfOperStatusUp)
+            continue;
+        if (adapter->IfType == IF_TYPE_SOFTWARE_LOOPBACK)
+            continue;
+
+        QString ipv4;
+        for (IP_ADAPTER_UNICAST_ADDRESS_LH *unicast = adapter->FirstUnicastAddress;
+             unicast != nullptr; unicast = unicast->Next)
+        {
+            const LPSOCKADDR sockaddr = unicast->Address.lpSockaddr;
+            if (sockaddr == nullptr || sockaddr->sa_family != AF_INET)
+                continue;
+
+            const sockaddr_in *addr = reinterpret_cast<const sockaddr_in *>(sockaddr);
+            const QHostAddress address(ntohl(addr->sin_addr.s_addr));
+            if (!address.isNull() && !address.isLoopback())
+            {
+                ipv4 = address.toString();
+                break;
+            }
+        }
+
+        if (ipv4.isEmpty())
+            continue;
+
+        LocalInterface entry;
+        entry.name = QString::fromWCharArray(adapter->FriendlyName);
+        entry.index = static_cast<int>(adapter->Ipv6IfIndex);
+        entry.ipv4 = ipv4;
+        interfaces.append(entry);
+    }
+
+    return interfaces;
+}
+
+void primeIpv6Neighbors(int interfaceIndex)
+{
+    if (interfaceIndex <= 0)
+        return;
+
+    QProcess process;
+    process.setProcessChannelMode(QProcess::MergedChannels);
+    const QString target = QStringLiteral("ff02::1%") + QString::number(interfaceIndex);
+    const QStringList arguments = QStringList()
+        << QStringLiteral("-6") << QStringLiteral("-n") << QStringLiteral("1")
+        << QStringLiteral("-w") << QStringLiteral("400") << target;
+    process.start(QStringLiteral("ping"), arguments, QIODevice::ReadOnly);
+    if (!process.waitForStarted(500))
+        return;
+
+    if (process.state() != QProcess::NotRunning)
+    {
+        if (!process.waitForFinished(1500))
+        {
+            process.kill();
+            process.waitForFinished(200);
+        }
+    }
+}
+
+QHash<QString, QString> readIpv6Neighbors(int timeoutMs)
+{
+    QHash<QString, QString> table;
+
+    const QStringList arguments = QStringList()
+        << QStringLiteral("interface") << QStringLiteral("ipv6") << QStringLiteral("show")
+        << QStringLiteral("neighbors");
+    const QString output = runSystemCommand(QStringLiteral("netsh"), arguments, timeoutMs);
+    if (output.isEmpty())
+        return table;
+
+    const QStringList lines = splitArpOutput(output);
+    for (const QString &line : lines)
+    {
+        const QStringList fields = splitArpFields(line);
+        if (fields.size() < 3)
+            continue;
+
+        // 只保留链路本地地址（自动排除 ff02:: 组播与全局地址）
+        const QString address = fields.at(0);
+        if (!address.startsWith(QStringLiteral("fe80"), Qt::CaseInsensitive))
+            continue;
+
+        const QString mac = formatMacAddress(fields.at(1));
+        if (mac.isEmpty() || mac == QStringLiteral("00-00-00-00-00-00"))
+            continue;
+
+        if (!table.contains(mac))
+            table.insert(mac, address);
+    }
+
+    return table;
 }
 
 QString localMacAddress()

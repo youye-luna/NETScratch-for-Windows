@@ -21,11 +21,15 @@ public:
     /// 填充数据（清空后重建所有行与分布图颜色）
     void populateData(const QVector<DhcpServerInfo> &devices);
 
-    /// 当前表格所有行数据（每行 6 项：表格 5 列 + 补回的状态列，用于导出）
+    /// 当前表格所有行数据（每行 7 项：表格前 5 列含 IPv6 + 补回的 DHCP / 状态列，用于导出；
+    /// IPv6 显示关闭时该项为横杠）
     QList<QStringList> getRows() const;
 
     /// 切换语言后刷新列头与单元格文本
     void refreshLanguage();
+
+    /// IPv6 列可见性：关闭时隐藏表格 IPv6 列，导出该列填横杠
+    void setIpv6Visible(bool visible);
 
     /// 预览用：不扫描，填入示例设备后直接弹出设备详情窗（--preview 启动参数）
     void showDetailPreview();
@@ -43,4 +47,5 @@ private:
     QTableWidget *m_grid = nullptr;
     IPGridPanel *m_ipGrid = nullptr;
     QVector<DhcpServerInfo> m_rowInfos;
+    bool m_ipv6Visible = true;
 };

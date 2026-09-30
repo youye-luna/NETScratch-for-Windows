@@ -23,6 +23,8 @@ struct DhcpServerInfo
     bool isCamera = false;
     /// 摄像头识别依据（未判定为摄像头时为空）
     QString cameraEvidence;
+    /// 提取到的 IPv6 地址（链路本地 fe80::，未提取到为空）
+    QString ipv6Address;
     qint64 pingMs = 0;
 };
 
@@ -43,7 +45,7 @@ class ScanWorker : public QThread
 {
     Q_OBJECT
 public:
-    ScanWorker(const QStringList &ipList, int maxParallelism,
+    ScanWorker(const QStringList &ipList, int maxParallelism, bool ipv6Enabled,
                const QSharedPointer<ScanCancelToken> &token, QObject *parent = nullptr);
 
     /// 请求取消（线程安全）
@@ -62,12 +64,18 @@ private:
     /// 补齐 nmap 未提供的信息（主机名 / MAC / 是否为 DHCP 服务器）
     void enrichHost(DhcpServerInfo &info) const;
     void applyArpResults(QVector<DhcpServerInfo> &results) const;
+    /// 预热扫描网段所在网卡的 IPv6 邻居表（向 ff02::1 发回显）
+    void prepareIpv6Neighbors() const;
+    /// 按 MAC 从 IPv6 邻居表回填 ipv6Address
+    void applyIpv6Results(QVector<DhcpServerInfo> &results) const;
     bool isLikelyRouterOrDhcp(const QString &ip, const QString &hostName) const;
     QString queryMacAddress(const QString &ip) const;
     QString queryHostName(const QString &ip) const;
 
     QStringList m_ipList;
     int m_maxParallelism;
+    /// 是否提取 IPv6（关闭时跳过邻居表预热与回填）
+    bool m_ipv6Enabled;
     QSharedPointer<ScanCancelToken> m_token;
 };
 
@@ -82,6 +90,9 @@ public:
     bool isScanning() const { return m_isScanning; }
     int maxParallelism() const { return m_maxParallelism; }
     void setMaxParallelism(int value) { m_maxParallelism = value; }
+
+    /// 是否提取并显示 IPv6（默认开启）
+    void setIpv6Enabled(bool enabled) { m_ipv6Enabled = enabled; }
 
     /// 停止当前扫描（立即置取消标志，不阻塞等待线程结束）
     void stopScan();
@@ -103,6 +114,7 @@ private slots:
 private:
     int m_maxParallelism = 30;
     bool m_isScanning = false;
+    bool m_ipv6Enabled = true;
     QSharedPointer<ScanCancelToken> m_token;
     ScanWorker *m_worker = nullptr;
 };
