@@ -18,9 +18,6 @@ Windows 7 SP1 ~ Windows 11<br>
 未安装 Npcap 时 nmap 自动退化为 connect() 模式，功能可用但速度较慢、拿不到 MAC 地址。<br>
 Npcap 版权归 Nmap Software LLC 所有，许可条款见 https://npcap.com/#license。
 ## 软件截图（2026-08-04拍摄）
-<img width="1920" height="1032" alt="图片" src="https://github.com/user-attachments/assets/0f9f644f-5d92-4682-be5d-5043c383aeee" />
-<img width="1920" height="1032" alt="图片" src="https://github.com/user-attachments/assets/36ab8539-1b4a-4a30-b215-b2e95866df34" />
-<img width="1920" height="1032" alt="图片" src="https://github.com/user-attachments/assets/9e331a8a-f1e2-4b79-9b76-94accc6f4614" />
 
 
 ## 结尾
