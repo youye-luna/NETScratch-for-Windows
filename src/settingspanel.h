@@ -87,12 +87,19 @@ private:
     ToggleSwitch *m_swIpv6 = nullptr;
     QLabel *m_lblIpv6 = nullptr;
 
-    /// 分区标题：历史记录设置（下辖「数据保存时长」与「保存范围」）
+    /// 默认扫描网卡（空 = 由系统路由自动选择）
+    QLabel *m_lblDefaultAdapter = nullptr;
+    QComboBox *m_comboDefaultAdapter = nullptr;
+    QPushButton *m_btnRefreshAdapter = nullptr;
+
+    /// 分区标题：历史记录设置（下辖「清理方式」与「保留范围」）
     QLabel *m_lblHistorySection = nullptr;
 
     QGroupBox *m_groupMethod = nullptr;
     QRadioButton *m_radioByTime = nullptr;
     QRadioButton *m_radioByCount = nullptr;
+    QRadioButton *m_radioNever = nullptr;
+    QRadioButton *m_radioSaveNever = nullptr;
 
     QGroupBox *m_groupRange = nullptr;
     QWidget *m_panelTimeRange = nullptr;
@@ -102,7 +109,6 @@ private:
     QRadioButton *m_radioDaysHalf = nullptr;
     QRadioButton *m_radioDaysMonth = nullptr;
     QRadioButton *m_radioDaysYear = nullptr;
-    QRadioButton *m_radioNever = nullptr;
     QRadioButton *m_radioCustom = nullptr;
     QSpinBox *m_numCustomDays = nullptr;
 

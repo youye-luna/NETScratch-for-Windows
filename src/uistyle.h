@@ -14,6 +14,9 @@
 #include <QStyleOptionViewItem>
 #include <QWidget>
 
+#include "lang.h"
+#include "netutils.h"
+
 namespace UiStyle
 {
 // ------------------------------------------------------------------ 配色
@@ -239,6 +242,53 @@ inline void enableRoundedPopup(QComboBox *combo)
 
     // 1mm ≈ 3.78px（96 DPI），取整为 4px
     combo->view()->setItemDelegate(new ComboItemDelegate(4, combo->view()));
+}
+
+/// 「自动选择」项的显示文本：附上系统默认路由实际识别到的网卡与 IP，
+/// 让用户知道不指定网卡时会走哪条路（如「自动选择 (以太网 - 192.168.31.117)」）
+inline QString autoAdapterText()
+{
+    const QString ipv4 = NetUtils::localIpv4Address();
+    if (ipv4.isEmpty())
+        return Lang::get(QStringLiteral("AdapterAuto"));
+
+    QString name;
+    const QVector<NetUtils::LocalInterface> interfaces = NetUtils::localInterfaces();
+    for (const NetUtils::LocalInterface &iface : interfaces)
+    {
+        if (iface.ipv4 == ipv4)
+        {
+            name = iface.name;
+            break;
+        }
+    }
+
+    const QString detail = name.isEmpty() ? ipv4 : QStringLiteral("%1 - %2").arg(name, ipv4);
+    return QStringLiteral("%1 (%2)").arg(Lang::get(QStringLiteral("AdapterAuto")), detail);
+}
+
+/// 填充网卡下拉：第 0 项为「自动选择」（data 为空串，文本见 autoAdapterText），
+/// 其后每张网卡一项，文本为「名称 (IPv4)」，data 存适配器 GUID。
+/// 选中项按 GUID 恢复：网卡顺序在不同机器、不同时刻都可能变化，按下标不可靠。
+/// 重建期间屏蔽信号，避免调用方的 currentIndexChanged 逻辑被误触发。
+inline void fillAdapterCombo(QComboBox *combo, const QString &selected)
+{
+    combo->blockSignals(true);
+    combo->clear();
+    combo->addItem(autoAdapterText(), QString());
+
+    const QVector<NetUtils::LocalInterface> interfaces = NetUtils::localInterfaces();
+    for (const NetUtils::LocalInterface &iface : interfaces)
+    {
+        const QString text = iface.ipv4.isEmpty()
+                                 ? iface.name
+                                 : QStringLiteral("%1 (%2)").arg(iface.name, iface.ipv4);
+        combo->addItem(text, iface.adapterName);
+    }
+
+    const int index = combo->findData(selected);
+    combo->setCurrentIndex(index < 0 ? 0 : index);
+    combo->blockSignals(false);
 }
 
 } // namespace UiStyle

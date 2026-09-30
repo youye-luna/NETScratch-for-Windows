@@ -48,6 +48,14 @@ void ToggleSwitch::animateTo(bool checked)
     m_animation->start();
 }
 
+void ToggleSwitch::checkStateSet()
+{
+    // 编程式 setChecked()（含状态未变化、不发 toggled 的情况）直接落位，
+    // 保证滑块视觉与 isChecked() 始终一致
+    m_animation->stop();
+    setPosition(isChecked() ? 1.0 : 0.0);
+}
+
 void ToggleSwitch::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);

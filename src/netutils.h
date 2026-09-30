@@ -41,13 +41,20 @@ QString formatMac(const QString &raw);
 /// 本机网卡（名称 / IPv6 接口索引 / IPv4），用于定位扫描网段所在网卡
 struct LocalInterface
 {
-    QString name;   ///< 网卡友好名称
-    int index = -1; ///< IPv6 接口索引（ping -6 ... %index 使用）
-    QString ipv4;   ///< 该网卡第一个非回环 IPv4
+    QString name;        ///< 网卡友好名称
+    int index = -1;      ///< IPv6 接口索引（ping -6 ... %index 使用）
+    QString ipv4;        ///< 该网卡第一个非回环 IPv4
+    QString adapterName; ///< Windows 适配器 GUID（{...}），用于拼 Npcap 设备名
 };
 
 /// 枚举本机已启用且配置了 IPv4 的网卡
 QVector<LocalInterface> localInterfaces();
+
+/// 由适配器 GUID 拼出 Npcap 设备名（\Device\NPF_{GUID}）；adapterName 为空时返回空
+QString npcapDeviceName(const QString &adapterName);
+
+/// 本机是否装有 Npcap/WinPcap（未装时 nmap 退化到 connect 模式，不能用 -e）
+bool isNpcapAvailable();
 
 /// 向 ff02::1 发一次 ICMPv6 回显，促使系统补齐 NDP 邻居表
 void primeIpv6Neighbors(int interfaceIndex);

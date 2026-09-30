@@ -10,8 +10,10 @@
 #include "nmaprunner.h"
 
 #include "scanner.h" // ScanCancelToken
+#include "netutils.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
@@ -125,7 +127,7 @@ QString NmapRunner::findNmapExecutable()
     return fromPath.isEmpty() ? QString() : QDir::toNativeSeparators(fromPath);
 }
 
-QVector<NmapHost> NmapRunner::scanHosts(const QStringList &ipList,
+QVector<NmapHost> NmapRunner::scanHosts(const QStringList &ipList, const QString &adapterName,
                                         const std::function<void(int)> &onProgress,
                                         const ScanCancelToken *token,
                                         QString *errorMessage)
@@ -142,7 +144,7 @@ QVector<NmapHost> NmapRunner::scanHosts(const QStringList &ipList,
         return hosts;
     }
 
-    const QStringList arguments = {
+    QStringList arguments = {
         QStringLiteral("-sn"),                        // 只做主机发现
         QStringLiteral("-n"),                         // 不做反向 DNS（交给 NetUtils 解析，避免 nmap 侧等待）
         QStringLiteral("-oX"), QStringLiteral("-"),   // XML 输出到标准输出
@@ -152,6 +154,17 @@ QVector<NmapHost> NmapRunner::scanHosts(const QStringList &ipList,
         QStringLiteral("--host-timeout"), QStringLiteral("3s"),    // 单主机硬上限，避免个别主机卡住整体进度
         QStringLiteral("-PS%1").arg(QLatin1String(kProbePorts)),
         QStringLiteral("-iL"), QStringLiteral("-")};  // 目标列表从标准输入读取，避免命令行过长
+
+    // 指定出口网卡：仅在「选中了网卡」且本机装有 Npcap 时才加 -e。
+    // 未装 Npcap 时 nmap 走 connect 模式，-e 无效甚至报错，此时保持原行为交给 nmap 自动选卡
+    const QString device = NetUtils::npcapDeviceName(adapterName);
+    if (!device.isEmpty() && NetUtils::isNpcapAvailable())
+    {
+        arguments.insert(1, device);
+        arguments.insert(1, QStringLiteral("-e"));
+    }
+
+    qDebug().noquote() << "nmap" << arguments.join(QLatin1Char(' '));
 
     QProcess process;
     process.setProcessChannelMode(QProcess::SeparateChannels);

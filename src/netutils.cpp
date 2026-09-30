@@ -22,6 +22,7 @@
 #include <QAbstractSocket>
 #include <QByteArray>
 #include <QElapsedTimer>
+#include <QFileInfo>
 #include <QHash>
 #include <QHostAddress>
 #include <QHostInfo>
@@ -561,10 +562,41 @@ QVector<LocalInterface> localInterfaces()
         entry.name = QString::fromWCharArray(adapter->FriendlyName);
         entry.index = static_cast<int>(adapter->Ipv6IfIndex);
         entry.ipv4 = ipv4;
+        entry.adapterName = QString::fromLatin1(adapter->AdapterName);
         interfaces.append(entry);
     }
 
     return interfaces;
+}
+
+QString npcapDeviceName(const QString &adapterName)
+{
+    if (adapterName.isEmpty())
+        return QString();
+    // WinPcap/Npcap 的设备名就是 \Device\NPF_ 加上 Windows 适配器 GUID
+    return QStringLiteral("\\Device\\NPF_") + adapterName;
+}
+
+bool isNpcapAvailable()
+{
+    // 与安装脚本 IsNpcapInstalled() 同一套判据：Npcap 的 wpcap.dll ，
+    // 或勾了 WinPcap API-compatible Mode 时的 System32\wpcap.dll
+    static const int cached = []() -> int {
+        wchar_t systemDir[MAX_PATH] = {0};
+        const UINT length = GetSystemDirectoryW(systemDir, MAX_PATH);
+        if (length == 0 || length >= MAX_PATH)
+            return 0;
+        const QString sysDir = QString::fromWCharArray(systemDir, static_cast<int>(length));
+        const QStringList candidates = {sysDir + QStringLiteral("/Npcap/wpcap.dll"),
+                                        sysDir + QStringLiteral("/wpcap.dll")};
+        for (const QString &candidate : candidates)
+        {
+            if (QFileInfo::exists(candidate))
+                return 1;
+        }
+        return 0;
+    }();
+    return cached == 1;
 }
 
 void primeIpv6Neighbors(int interfaceIndex)

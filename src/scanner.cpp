@@ -91,11 +91,13 @@ QVector<NmapHost> confirmAliveHosts(const QVector<NmapHost> &hosts, int maxParal
 } // namespace
 
 ScanWorker::ScanWorker(const QStringList &ipList, int maxParallelism, bool ipv6Enabled,
-                       const QSharedPointer<ScanCancelToken> &token, QObject *parent)
+                       const QString &adapterName, const QSharedPointer<ScanCancelToken> &token,
+                       QObject *parent)
     : QThread(parent)
     , m_ipList(ipList)
     , m_maxParallelism(qMax(1, maxParallelism))
     , m_ipv6Enabled(ipv6Enabled)
+    , m_adapterName(adapterName)
     , m_token(token)
 {
 }
@@ -120,8 +122,8 @@ void ScanWorker::run()
         // 1) 交给 nmap 子进程做主机发现（进度占前 50%）
         QString nmapError;
         const QVector<NmapHost> aliveHosts = NmapRunner::scanHosts(
-            m_ipList, [this](int percent) { emit progressChanged(percent / 2); }, m_token.data(),
-            &nmapError);
+            m_ipList, m_adapterName, [this](int percent) { emit progressChanged(percent / 2); },
+            m_token.data(), &nmapError);
 
         if (!m_token.isNull() && m_token->isCancelled())
         {
@@ -357,7 +359,8 @@ void ScanWorker::prepareIpv6Neighbors() const
     if (m_ipList.isEmpty())
         return;
 
-    // 只预热与待扫网段同前缀的网卡，避免逐张网卡发组播造成额外耗时
+    // 只预热本次扫描实际使用的网卡，避免逐张网卡发组播造成额外耗时。
+    // 用户指定了网卡时按 GUID 精确定位；未指定时退回按网段前缀匹配。
     const QStringList parts = m_ipList.first().split(QLatin1Char('.'));
     if (parts.size() != 4)
         return;
@@ -366,9 +369,16 @@ void ScanWorker::prepareIpv6Neighbors() const
     const QVector<NetUtils::LocalInterface> interfaces = NetUtils::localInterfaces();
     for (const NetUtils::LocalInterface &iface : interfaces)
     {
-        if (iface.index <= 0 || !iface.ipv4.startsWith(prefix))
+        if (iface.index <= 0)
             continue;
-        NetUtils::primeIpv6Neighbors(iface.index);
+        if (!m_adapterName.isEmpty())
+        {
+            if (iface.adapterName == m_adapterName)
+                NetUtils::primeIpv6Neighbors(iface.index);
+            continue;
+        }
+        if (iface.ipv4.startsWith(prefix))
+            NetUtils::primeIpv6Neighbors(iface.index);
     }
 }
 
@@ -477,7 +487,8 @@ void Scanner::stopScan()
         m_token->cancel();
 }
 
-bool Scanner::startIpRangeScan(const QString &startIp, const QString &endIp, QString *errorMessage)
+bool Scanner::startIpRangeScan(const QString &startIp, const QString &endIp,
+                               const QString &adapterName, QString *errorMessage)
 {
     if (m_isScanning)
     {
@@ -541,7 +552,7 @@ bool Scanner::startIpRangeScan(const QString &startIp, const QString &endIp, QSt
 
     m_isScanning = true;
     m_token = QSharedPointer<ScanCancelToken>::create();
-    m_worker = new ScanWorker(ipList, m_maxParallelism, m_ipv6Enabled, m_token, this);
+    m_worker = new ScanWorker(ipList, m_maxParallelism, m_ipv6Enabled, adapterName, m_token, this);
 
     connect(m_worker, &ScanWorker::progressChanged, this, &Scanner::scanProgress, Qt::QueuedConnection);
     connect(m_worker, &ScanWorker::completed, this, &Scanner::scanCompleted, Qt::QueuedConnection);

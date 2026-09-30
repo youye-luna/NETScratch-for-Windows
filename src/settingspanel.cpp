@@ -31,7 +31,7 @@ namespace {
 // 设置内容列的最小宽度与固定高度（列本身无背景无边框，靠左排列）
 // 宽度按「关于」区三列并排所需的最小尺寸取定，实际宽度随窗口拉伸。
 const int kContentWidth = 710;
-const int kContentHeight = 740;
+const int kContentHeight = 780;
 
 // 设置页整体放大系数：字号与间距一起放大，保持版面比例不变
 constexpr double kScale = 1.09;
@@ -50,8 +50,8 @@ const int kAboutLogoWidth = 176;   // 左列宽度，按版权文案实测取定
 const int kAboutMinGap = S(20);    // 三列之间的最小间距
 
 // 「关于」区的垂直布局（设计稿坐标）
-const int kAboutLineTopY = S(540);       // 上分隔线（仅保留这一条）
-const int kAboutBlockTop = S(560);       // 中/右两列顶部
+const int kAboutLineTopY = S(600);       // 上分隔线（仅保留这一条）
+const int kAboutBlockTop = S(620);       // 中/右两列顶部
 const int kAboutNameHeight = S(30);      // 应用名行高
 const int kAboutVersionHeight = S(22);   // 版本号行高
 const int kAboutCopyrightHeight = S(22); // 版权行高
@@ -348,24 +348,53 @@ SettingsPanel::SettingsPanel(QWidget *parent)
     m_swIpv6->setGeometry(S(150), S(246), S(46), S(26));
     m_swIpv6->setChecked(m_settings.ipv6Enabled);
 
-    // ------------------------------------------------------------ 历史记录设置
-    // 分区标题，下辖「数据保存时长」与「保存范围」两个子分组
-    m_lblHistorySection =
-        makeSectionTitle(m_content, Lang::get(QStringLiteral("HistorySettings")), 288);
+    // 默认扫描网卡：第 0 项为「自动选择」，其后每张网卡一项（userData 存适配器 GUID）
+    m_lblDefaultAdapter = new QLabel(Lang::get(QStringLiteral("DefaultAdapterLabel")), m_content);
+    m_lblDefaultAdapter->move(S(20), S(284));
+    m_lblDefaultAdapter->adjustSize();
+    m_lblDefaultAdapter->setFont(scaledLabelFont());
+    m_lblDefaultAdapter->setStyleSheet(QStringLiteral("color: #1f2329;"));
 
-    // ------------------------------------------------------------ 数据保存时长
-    // 三个互斥选项：按时间保存 / 按数量保存 / 永不清除（同一父控件自动互斥）
+    m_comboDefaultAdapter = new QComboBox(m_content);
+    m_comboDefaultAdapter->setGeometry(S(150), S(280), S(220), S(25));
+    m_comboDefaultAdapter->setFont(scaledLabelFont());
+    m_comboDefaultAdapter->setStyleSheet(UiStyle::comboBoxStyle());
+    UiStyle::enableRoundedPopup(m_comboDefaultAdapter);
+
+    // 网卡列表是启动时枚举的快照，插拔网卡（如插上网线、接上扩展坞）后需要手动刷新
+    m_btnRefreshAdapter = new QPushButton(Lang::get(QStringLiteral("AdapterRefresh")), m_content);
+    m_btnRefreshAdapter->setGeometry(S(378), S(280), S(60), S(25));
+    m_btnRefreshAdapter->setFont(scaledLabelFont());
+    m_btnRefreshAdapter->setCursor(Qt::PointingHandCursor);
+    m_btnRefreshAdapter->setStyleSheet(UiStyle::secondaryButtonStyle());
+    connect(m_btnRefreshAdapter, &QPushButton::clicked, this, [this]() {
+        // 重新枚举网卡，尽量保留用户当前的选择（按适配器 GUID 恢复）
+        UiStyle::fillAdapterCombo(m_comboDefaultAdapter,
+                                  m_comboDefaultAdapter->currentData().toString());
+    });
+
+    UiStyle::fillAdapterCombo(m_comboDefaultAdapter, m_settings.scanAdapter);
+
+    // ------------------------------------------------------------ 历史记录设置
+    // 分区标题，下辖「清理方式」与「保留范围」两个子分组
+    m_lblHistorySection =
+        makeSectionTitle(m_content, Lang::get(QStringLiteral("HistorySettings")), 322);
+
+    // ------------------------------------------------------------ 清理方式
+    // 四个互斥选项，两行两列摆放（英文文案较长，两列可避免单行溢出）：
+    // 按时间保存 / 按数量保存 在上，不清除 / 不保存 在下
     m_groupMethod = new QGroupBox(Lang::get(QStringLiteral("SaveMethodGroup")), m_content);
-    m_groupMethod->setGeometry(S(15), S(312), S(430), S(68));
+    m_groupMethod->setGeometry(S(15), S(346), S(430), S(94));
     m_groupMethod->setFont(scaledYaHei(9, true));
 
     m_radioByTime = makeRadio(m_groupMethod, Lang::get(QStringLiteral("SaveByTime")), S(5), S(32));
-    m_radioByCount = makeRadio(m_groupMethod, Lang::get(QStringLiteral("SaveByCount")), S(160), S(32));
-    m_radioNever = makeRadio(m_groupMethod, Lang::get(QStringLiteral("RangeNever")), S(315), S(32));
+    m_radioByCount = makeRadio(m_groupMethod, Lang::get(QStringLiteral("SaveByCount")), S(245), S(32));
+    m_radioNever = makeRadio(m_groupMethod, Lang::get(QStringLiteral("RangeNever")), S(5), S(58));
+    m_radioSaveNever = makeRadio(m_groupMethod, Lang::get(QStringLiteral("SaveNever")), S(245), S(58));
 
-    // ------------------------------------------------------------ 保存范围
+    // ------------------------------------------------------------ 保留范围
     m_groupRange = new QGroupBox(Lang::get(QStringLiteral("SaveRangeGroup")), m_content);
-    m_groupRange->setGeometry(S(15), S(386), S(430), S(124));
+    m_groupRange->setGeometry(S(15), S(446), S(430), S(124));
     m_groupRange->setFont(scaledYaHei(9, true));
 
     // 时间范围选项（独立容器，避免与数量选项互相排斥）
@@ -443,12 +472,13 @@ SettingsPanel::SettingsPanel(QWidget *parent)
 
     refreshAboutText();
 
-    // 「按时间保存 / 按数量保存 / 永不清除」三选一。
-    // 选中「永不清除」时整块隐藏「保存范围」，并让「关于」区随之上移，
+    // 「按时间保存 / 按数量保存 / 不清除 / 不保存」四选一。
+    // 选中「不清除」或「不保存」时整块隐藏「保留范围」，并让「关于」区随之上移，
     // 因此这里必须等「关于」区控件全部建好之后再挂信号、回滚/初始化控件。
     connect(m_radioByTime, &QRadioButton::toggled, this, &SettingsPanel::updateRangeVisibility);
     connect(m_radioByCount, &QRadioButton::toggled, this, &SettingsPanel::updateRangeVisibility);
     connect(m_radioNever, &QRadioButton::toggled, this, &SettingsPanel::updateRangeVisibility);
+    connect(m_radioSaveNever, &QRadioButton::toggled, this, &SettingsPanel::updateRangeVisibility);
     syncFromSettings();
 }
 
@@ -458,8 +488,8 @@ void SettingsPanel::layoutAbout()
     if (span <= 0)
         return;
 
-    // 选了「永不清除」时「保存范围」分组整块隐藏，「关于」区随之上移，
-    // 贴到「数据保存时长」分组下方，避免中间留出大块空白。
+    // 选了「不清除」或「不保存」时「保留范围」分组整块隐藏，「关于」区随之上移，
+    // 贴到「清理方式」分组下方，避免中间留出大块空白。
     const int blockShift =
         m_groupRange->isHidden()
             ? -(m_groupRange->geometry().bottom() - m_groupMethod->geometry().bottom())
@@ -562,19 +592,26 @@ void SettingsPanel::applyLanguage()
     m_lblHint->setText(Lang::get(QStringLiteral("ThreadsHint")));
     m_lblIpv6->setText(Lang::get(QStringLiteral("Ipv6Toggle")));
     m_lblIpv6->adjustSize();
+    m_lblDefaultAdapter->setText(Lang::get(QStringLiteral("DefaultAdapterLabel")));
+    m_lblDefaultAdapter->adjustSize();
+    m_btnRefreshAdapter->setText(Lang::get(QStringLiteral("AdapterRefresh")));
+    // 重建下拉项（「自动选择」文案随语言变化），保留用户当前选择
+    UiStyle::fillAdapterCombo(m_comboDefaultAdapter,
+                              m_comboDefaultAdapter->currentData().toString());
 
     m_lblHistorySection->setText(Lang::get(QStringLiteral("HistorySettings")));
 
     m_groupMethod->setTitle(Lang::get(QStringLiteral("SaveMethodGroup")));
     m_radioByTime->setText(Lang::get(QStringLiteral("SaveByTime")));
     m_radioByCount->setText(Lang::get(QStringLiteral("SaveByCount")));
+    m_radioNever->setText(Lang::get(QStringLiteral("RangeNever")));
+    m_radioSaveNever->setText(Lang::get(QStringLiteral("SaveNever")));
 
     m_groupRange->setTitle(Lang::get(QStringLiteral("SaveRangeGroup")));
     m_radioDays14->setText(Lang::get(QStringLiteral("Range14Days")));
     m_radioDaysHalf->setText(Lang::get(QStringLiteral("RangeHalfMonth")));
     m_radioDaysMonth->setText(Lang::get(QStringLiteral("RangeOneMonth")));
     m_radioDaysYear->setText(Lang::get(QStringLiteral("RangeOneYear")));
-    m_radioNever->setText(Lang::get(QStringLiteral("RangeNever")));
     m_radioCustom->setText(Lang::get(QStringLiteral("RangeCustom")));
     m_radioCount30->setText(Lang::get(QStringLiteral("Range30")));
     m_radioCount60->setText(Lang::get(QStringLiteral("Range60")));
@@ -582,10 +619,11 @@ void SettingsPanel::applyLanguage()
     m_radioCount100->setText(Lang::get(QStringLiteral("Range100")));
 
     // 选项文本长度随语言变化，重算自适应尺寸
-    const QVector<QRadioButton *> radios{m_radioByTime,  m_radioByCount,  m_radioDays14,
-                                         m_radioDaysHalf, m_radioDaysMonth, m_radioDaysYear,
-                                         m_radioNever,   m_radioCustom,   m_radioCount30,
-                                         m_radioCount60, m_radioCount90,  m_radioCount100};
+    const QVector<QRadioButton *> radios{m_radioByTime,    m_radioByCount, m_radioNever,
+                                         m_radioSaveNever, m_radioDays14,  m_radioDaysHalf,
+                                         m_radioDaysMonth, m_radioDaysYear, m_radioCustom,
+                                         m_radioCount30,   m_radioCount60, m_radioCount90,
+                                         m_radioCount100};
     for (QRadioButton *radio : radios)
         radio->adjustSize();
 
@@ -610,7 +648,7 @@ void SettingsPanel::initRangeSelection()
         m_radioDaysYear->setChecked(true);
         break;
     case 0:
-        // 永不清除由「数据保存时长」分组单独处理，这里不再选任何时间选项
+        // 「不清除」由「清理方式」分组单独处理，这里不再选任何时间选项
         break;
     default:
         // 自定义天数
@@ -637,9 +675,9 @@ void SettingsPanel::initRangeSelection()
 
 void SettingsPanel::updateRangeVisibility()
 {
-    const bool never = m_radioNever->isChecked();
-    // 选了「永不清除」时整块「保存范围」都不需要
-    m_groupRange->setVisible(!never);
+    const bool noRange = m_radioNever->isChecked() || m_radioSaveNever->isChecked();
+    // 选了「不清除」或「不保存」时整块「保留范围」都不需要
+    m_groupRange->setVisible(!noRange);
     m_panelTimeRange->setVisible(m_radioByTime->isChecked());
     m_panelCountRange->setVisible(m_radioByCount->isChecked());
     // 可见性变了，「关于」区要跟着上移或回落
@@ -652,8 +690,15 @@ void SettingsPanel::collectFromWidgets(AppSettings &out) const
     out.language = languageParse(m_comboLanguage->currentText());
     out.scanThreads = m_numThreads->value();
     out.ipv6Enabled = m_swIpv6->isChecked();
+    out.scanAdapter = m_comboDefaultAdapter->currentData().toString();
     out.dateFormat = m_comboDateFormat->currentData().toString();
     out.timeFormat = m_comboTimeFormat->currentData().toString();
+
+    if (m_radioSaveNever->isChecked()) {
+        // 不保存：天数/条数保持原值，便于切回其它方式时恢复原先的选择
+        out.historySaveMode = HistorySaveMode::None;
+        return;
+    }
 
     if (m_radioByCount->isChecked()) {
         out.historySaveMode = HistorySaveMode::ByCount;
@@ -668,7 +713,7 @@ void SettingsPanel::collectFromWidgets(AppSettings &out) const
     } else {
         out.historySaveMode = HistorySaveMode::ByTime;
         if (m_radioNever->isChecked())
-            out.historySaveDays = 0; // 永不清除
+            out.historySaveDays = 0; // 不清除
         else if (m_radioDays14->isChecked())
             out.historySaveDays = 14;
         else if (m_radioDaysHalf->isChecked())
@@ -704,8 +749,16 @@ void SettingsPanel::syncFromSettings()
                     false);
     m_numThreads->setValue(qBound(1, m_settings.scanThreads, 100));
     m_swIpv6->setChecked(m_settings.ipv6Enabled);
+    // 配置里的网卡可能已被拔出或禁用：此时回落到「自动选择」，并清掉失效的 GUID，
+    // 免得把不存在的设备名传给 nmap 导致扫描失败
+    if (!m_settings.scanAdapter.isEmpty()
+        && m_comboDefaultAdapter->findData(m_settings.scanAdapter) < 0)
+        m_settings.scanAdapter.clear();
+    UiStyle::fillAdapterCombo(m_comboDefaultAdapter, m_settings.scanAdapter);
 
-    if (m_settings.historySaveMode == HistorySaveMode::ByCount) {
+    if (m_settings.historySaveMode == HistorySaveMode::None) {
+        m_radioSaveNever->setChecked(true);
+    } else if (m_settings.historySaveMode == HistorySaveMode::ByCount) {
         m_radioByCount->setChecked(true);
     } else if (m_settings.historySaveDays == 0) {
         m_radioNever->setChecked(true);

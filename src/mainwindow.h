@@ -9,6 +9,7 @@
 class HistoryPanel;
 class IpAddressEdit;
 class QCloseEvent;
+class QComboBox;
 class QDialog;
 class QLabel;
 class QProgressBar;
@@ -63,6 +64,10 @@ private:
     void applyLanguage();
     void switchToPage(int page);
     void setScanningUiEnabled(bool scanning);
+    /// 重建首页网卡下拉，选中 selected 指定的网卡（空串 = 自动选择；找不到则回落自动选择）
+    void refreshAdapterCombo(const QString &selected);
+    /// 按当前选中的网卡把扫描范围重填为该网卡的 /24 网段
+    void applyAdapterToRange();
     void populateResultTabs(const QVector<DhcpServerInfo> &results);
     void clearResultTabs();
     void saveScanHistory(const QVector<DhcpServerInfo> &results);
@@ -87,6 +92,9 @@ private:
 
     // 主页：搜索卡片
     QLabel *m_labelTitle = nullptr;
+    QLabel *m_labelAdapter = nullptr;
+    QComboBox *m_comboAdapter = nullptr;
+    QPushButton *m_buttonRefreshAdapter = nullptr;
     QLabel *m_labelStartIp = nullptr;
     IpAddressEdit *m_ipStart = nullptr;
     QLabel *m_labelTo = nullptr;
@@ -120,4 +128,6 @@ private:
     bool m_isScanning = false;
     QString m_currentStartIp;
     QString m_currentEndIp;
+    /// 设置页保存的默认扫描网卡（适配器 GUID，空串 = 自动选择）
+    QString m_defaultAdapter;
 };
