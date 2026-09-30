@@ -24,9 +24,11 @@ namespace NmapRunner
 QString findNmapExecutable();
 
 /// 用 nmap -sn 对 ipList 做主机发现，只返回在线主机。
+/// adapterName 为 Windows 适配器 GUID（{...}），非空且本机装有 Npcap 时用 -e 指定出口网卡；
+/// 传空串表示交给 nmap 按系统路由自动选择。
 /// onProgress 收到 nmap 报告的 0-100 进度；token 用于取消。
 /// 失败时返回空列表并写入 errorMessage（调用方据此区分「扫描失败」与「没有在线主机」）。
-QVector<NmapHost> scanHosts(const QStringList &ipList,
+QVector<NmapHost> scanHosts(const QStringList &ipList, const QString &adapterName,
                             const std::function<void(int)> &onProgress,
                             const ScanCancelToken *token,
                             QString *errorMessage);

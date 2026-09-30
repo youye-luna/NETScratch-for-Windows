@@ -46,7 +46,8 @@ class ScanWorker : public QThread
     Q_OBJECT
 public:
     ScanWorker(const QStringList &ipList, int maxParallelism, bool ipv6Enabled,
-               const QSharedPointer<ScanCancelToken> &token, QObject *parent = nullptr);
+               const QString &adapterName, const QSharedPointer<ScanCancelToken> &token,
+               QObject *parent = nullptr);
 
     /// 请求取消（线程安全）
     void requestCancel();
@@ -76,6 +77,8 @@ private:
     int m_maxParallelism;
     /// 是否提取 IPv6（关闭时跳过邻居表预热与回填）
     bool m_ipv6Enabled;
+    /// 指定扫描用的网卡（适配器 GUID）；为空表示交给 nmap 自动选卡
+    QString m_adapterName;
     QSharedPointer<ScanCancelToken> m_token;
 };
 
@@ -97,9 +100,11 @@ public:
     /// 停止当前扫描（立即置取消标志，不阻塞等待线程结束）
     void stopScan();
 
-    /// 扫描指定 IP 范围；失败时把错误信息写入 errorMessage 并返回 false。
+    /// 扫描指定 IP 范围；adapterName 为指定网卡的适配器 GUID（空串 = 自动选卡）。
+    /// 失败时把错误信息写入 errorMessage 并返回 false。
     /// 错误信息可能是 "TOO_MANY_SUBNETS:<网段数>" 形式。
-    bool startIpRangeScan(const QString &startIp, const QString &endIp, QString *errorMessage);
+    bool startIpRangeScan(const QString &startIp, const QString &endIp, const QString &adapterName,
+                          QString *errorMessage);
 
 signals:
     void scanProgress(int progress);

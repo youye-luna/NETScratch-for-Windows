@@ -22,10 +22,13 @@ public:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    /// setChecked() 以编程方式改动状态时会回调此处（状态未变化时不发 toggled），
+    /// 用来把滑块直接落到与 isChecked() 一致的位置
+    void checkStateSet() override;
 
 private:
     void animateTo(bool checked);
 
-    qreal m_position = 1.0;
+    qreal m_position = 0.0;
     QPropertyAnimation *m_animation = nullptr;
 };

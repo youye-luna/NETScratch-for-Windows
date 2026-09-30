@@ -38,6 +38,9 @@ private:
 
     QVector<ScanHistoryRecord> m_records;
 
+    /// 当前是否处于「不保存」模式：为真时列表区显示专用提示而非记录
+    bool m_historyDisabled = false;
+
     /// 当前配置：用于按设置的日期/时间格式渲染扫描时间
     AppSettings m_settings;
 

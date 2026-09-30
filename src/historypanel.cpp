@@ -160,6 +160,8 @@ HistoryPanel::HistoryPanel(QWidget *parent)
 
 void HistoryPanel::reload()
 {
+    m_settings = AppSettings::load();
+    m_historyDisabled = (m_settings.historySaveMode == HistorySaveMode::None);
     m_records = ScanHistoryStore::load();
     fillTable();
 }
@@ -197,6 +199,9 @@ void HistoryPanel::fillTable()
     }
 
     const bool empty = m_records.isEmpty();
+    // 「不保存」模式下给出专用提示，与普通的「暂无扫描历史」区分开
+    m_lblEmpty->setText(Lang::get(m_historyDisabled ? QStringLiteral("HistoryDisabledNotice")
+                                                     : QStringLiteral("HistoryEmpty")));
     m_lblEmpty->setVisible(empty);
     m_table->setVisible(!empty);
 }
@@ -208,7 +213,6 @@ void HistoryPanel::applyLanguage()
     m_btnView->setText(Lang::get(QStringLiteral("HistoryView")));
     m_btnDelete->setText(Lang::get(QStringLiteral("HistoryDelete")));
     m_btnClear->setText(Lang::get(QStringLiteral("HistoryClear")));
-    m_lblEmpty->setText(Lang::get(QStringLiteral("HistoryEmpty")));
 
     m_table->setHorizontalHeaderLabels({Lang::get(QStringLiteral("ColHistoryTime")),
                                         Lang::get(QStringLiteral("ColHistoryRange")),
@@ -218,6 +222,7 @@ void HistoryPanel::applyLanguage()
 
     // 日期/时间格式来自设置页，先重新读取配置再渲染
     m_settings = AppSettings::load();
+    m_historyDisabled = (m_settings.historySaveMode == HistorySaveMode::None);
 
     // 时间/范围的显示格式随语言变化，按当前语言重新渲染行
     fillTable();

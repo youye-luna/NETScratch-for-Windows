@@ -113,8 +113,9 @@ AppSettings AppSettings::load()
                 settings.scanThreads = clampInt(
                     object.value(QStringLiteral("ScanThreads")).toInt(30), 1, 100);
                 settings.ipv6Enabled = object.value(QStringLiteral("Ipv6Enabled")).toBool(true);
+                settings.scanAdapter = object.value(QStringLiteral("ScanAdapter")).toString();
                 settings.historySaveMode = static_cast<HistorySaveMode>(
-                    clampInt(object.value(QStringLiteral("HistorySaveMode")).toInt(static_cast<int>(HistorySaveMode::ByCount)), 0, 1));
+                    clampInt(object.value(QStringLiteral("HistorySaveMode")).toInt(static_cast<int>(HistorySaveMode::ByCount)), 0, 2));
                 settings.historySaveDays = clampInt(
                     object.value(QStringLiteral("HistorySaveDays")).toInt(30), 0, 3650);
                 settings.historySaveMaxRecords = clampInt(
@@ -145,6 +146,7 @@ void AppSettings::save() const
     object.insert(QStringLiteral("Language"), static_cast<int>(language));
     object.insert(QStringLiteral("ScanThreads"), scanThreads);
     object.insert(QStringLiteral("Ipv6Enabled"), ipv6Enabled);
+    object.insert(QStringLiteral("ScanAdapter"), scanAdapter);
     object.insert(QStringLiteral("HistorySaveMode"), static_cast<int>(historySaveMode));
     object.insert(QStringLiteral("HistorySaveDays"), historySaveDays);
     object.insert(QStringLiteral("HistorySaveMaxRecords"), historySaveMaxRecords);

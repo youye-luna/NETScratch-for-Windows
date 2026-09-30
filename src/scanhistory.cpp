@@ -338,6 +338,8 @@ QVector<ScanHistoryRecord> applyRetention(const QVector<ScanHistoryRecord> &list
         return list;
 
     const AppSettings settings = AppSettings::load();
+    if (settings.historySaveMode == HistorySaveMode::None)
+        return list; // 不保存模式：不清理已有文件
     if (settings.historySaveMode == HistorySaveMode::ByCount)
     {
         if (list.size() <= settings.historySaveMaxRecords)
@@ -345,7 +347,7 @@ QVector<ScanHistoryRecord> applyRetention(const QVector<ScanHistoryRecord> &list
         return list.mid(0, settings.historySaveMaxRecords);
     }
     if (settings.historySaveDays <= 0)
-        return list; // 永不清除
+        return list; // 不清除
 
     const QDateTime cutoff = QDateTime::currentDateTime().addDays(-settings.historySaveDays);
     QVector<ScanHistoryRecord> retained;
@@ -394,6 +396,8 @@ QString historyDir()
 
 QVector<ScanHistoryRecord> load()
 {
+    if (AppSettings::load().historySaveMode == HistorySaveMode::None)
+        return {}; // 不保存模式：不展示任何历史记录
     return applyRetention(readAll());
 }
 
@@ -401,6 +405,9 @@ void save(ScanHistoryRecord *record)
 {
     if (!record)
         return;
+
+    if (AppSettings::load().historySaveMode == HistorySaveMode::None)
+        return; // 不保存模式：扫描结果不写入历史记录
 
     ensureDir();
 

@@ -4,8 +4,8 @@
 作者闲着没事干用AI做出来的东西<br>
 （作者PS：其实网上有很多比我这个做的更好的工具了，我做这个纯属白搭）
 ## 支持系统
-Windows 7 SP1 ~ Windows 11<br>
-（Windows 7 SP1 需先安装系统补丁 KB4474419，否则 Npcap 驱动无法通过 SHA-2 签名校验）
+支持 Windows 7 ~ Windows 11（64 位）<br>
+（Windows 7 需为 SP1 并先安装系统补丁 KB4474419，否则 Npcap 驱动无法通过 SHA-2 签名校验）
 ## 软件功能
 - IP占用扫描（主机发现由 [nmap](https://nmap.org/) 子进程完成）
 - DHCP服务器扫描<br>

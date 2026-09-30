@@ -10,6 +10,7 @@
 #include "uistyle.h"
 
 #include <QCloseEvent>
+#include <QComboBox>
 #include <QDateTime>
 #include <QDialog>
 #include <QFile>
@@ -187,6 +188,7 @@ MainWindow::MainWindow(QWidget *parent)
     // 加载设置（语言、扫描线程数）
     const AppSettings settings = AppSettings::load();
     Lang::setCurrent(settings.language);
+    m_defaultAdapter = settings.scanAdapter;
 
     buildUi();
 
@@ -399,6 +401,34 @@ QWidget *MainWindow::buildHomePage()
     m_labelTitle->setStyleSheet(QStringLiteral("color: #1f2329;"));
     cardLayout->addWidget(m_labelTitle);
 
+    // 网卡选择：仅作用于本次扫描，不写回配置；默认值来自设置页的「默认扫描网卡」
+    m_labelAdapter = new QLabel(searchCard);
+    m_labelAdapter->setFont(labelFont);
+    m_labelAdapter->setStyleSheet(QStringLiteral("color: #5b6470;"));
+
+    m_comboAdapter = new QComboBox(searchCard);
+    m_comboAdapter->setFont(labelFont);
+    m_comboAdapter->setStyleSheet(UiStyle::comboBoxStyle());
+    UiStyle::enableRoundedPopup(m_comboAdapter);
+    m_comboAdapter->setMinimumWidth(260);
+    refreshAdapterCombo(m_defaultAdapter);
+
+    // 网卡列表是启动时枚举的快照，插拔网卡后需要手动刷新
+    m_buttonRefreshAdapter = new QPushButton(searchCard);
+    m_buttonRefreshAdapter->setFont(labelFont);
+    m_buttonRefreshAdapter->setFixedSize(UiStyle::kButtonWidth, UiStyle::kButtonHeight);
+    m_buttonRefreshAdapter->setCursor(Qt::PointingHandCursor);
+    m_buttonRefreshAdapter->setStyleSheet(UiStyle::secondaryButtonStyle());
+
+    QHBoxLayout *adapterLayout = new QHBoxLayout;
+    adapterLayout->setContentsMargins(0, 0, 0, 0);
+    adapterLayout->setSpacing(8);
+    adapterLayout->addWidget(m_labelAdapter);
+    adapterLayout->addWidget(m_comboAdapter);
+    adapterLayout->addWidget(m_buttonRefreshAdapter);
+    adapterLayout->addStretch(1);
+    cardLayout->addLayout(adapterLayout);
+
     m_labelStartIp = new QLabel(searchCard);
     m_labelTo = new QLabel(searchCard);
     m_labelEndIp = new QLabel(searchCard);
@@ -414,15 +444,8 @@ QWidget *MainWindow::buildHomePage()
     m_ipStart->setFont(labelFont);
     m_ipEnd->setFont(labelFont);
 
-    // 用本机 IPv4 所在的 /24 网段预填扫描范围（192.168.1.1 ~ 192.168.1.255）
-    const QStringList localParts = NetUtils::localIpv4Address().split(QLatin1Char('.'));
-    if (localParts.size() >= 3)
-    {
-        const QString prefix = QStringLiteral("%1.%2.%3")
-                                   .arg(localParts.at(0), localParts.at(1), localParts.at(2));
-        m_ipStart->setAddress(prefix + QStringLiteral(".1"));
-        m_ipEnd->setAddress(prefix + QStringLiteral(".255"));
-    }
+    // 按当前网卡预填扫描范围（该网卡的 /24 网段，192.168.1.1 ~ 192.168.1.255）
+    applyAdapterToRange();
 
     QHBoxLayout *rangeLayout = new QHBoxLayout;
     rangeLayout->setContentsMargins(0, 0, 0, 0);
@@ -485,8 +508,47 @@ QWidget *MainWindow::buildHomePage()
     connect(m_buttonStop, &QPushButton::clicked, this, &MainWindow::onStopClicked);
     connect(m_buttonClear, &QPushButton::clicked, this, &MainWindow::onClearClicked);
     connect(m_buttonExport, &QPushButton::clicked, this, &MainWindow::onExportClicked);
+    // 换网卡后扫描范围跟着切到该网卡的网段，用户仍可手动改
+    connect(m_comboAdapter, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { applyAdapterToRange(); });
+    // 重新枚举网卡，保留当前选中（仅在又插了网卡、自动选择的出口变了时才需要）
+    connect(m_buttonRefreshAdapter, &QPushButton::clicked, this, [this]() {
+        refreshAdapterCombo(m_comboAdapter->currentData().toString());
+    });
 
     return page;
+}
+
+void MainWindow::refreshAdapterCombo(const QString &selected)
+{
+    UiStyle::fillAdapterCombo(m_comboAdapter, selected);
+}
+
+void MainWindow::applyAdapterToRange()
+{
+    // 选中具体网卡时用该网卡的 IPv4；「自动选择」时用系统默认路由所在的 IPv4
+    QString ipv4 = NetUtils::localIpv4Address();
+    const QString adapter = m_comboAdapter->currentData().toString();
+    if (!adapter.isEmpty())
+    {
+        const QVector<NetUtils::LocalInterface> interfaces = NetUtils::localInterfaces();
+        for (const NetUtils::LocalInterface &iface : interfaces)
+        {
+            if (iface.adapterName == adapter)
+            {
+                ipv4 = iface.ipv4;
+                break;
+            }
+        }
+    }
+
+    const QStringList parts = ipv4.split(QLatin1Char('.'));
+    if (parts.size() != 4)
+        return;
+
+    const QString prefix = QStringLiteral("%1.%2.%3").arg(parts.at(0), parts.at(1), parts.at(2));
+    m_ipStart->setAddress(prefix + QStringLiteral(".1"));
+    m_ipEnd->setAddress(prefix + QStringLiteral(".255"));
 }
 
 void MainWindow::applyLanguage()
@@ -498,6 +560,10 @@ void MainWindow::applyLanguage()
     m_navSettings->setText(Lang::get(QStringLiteral("Settings")));
 
     m_labelTitle->setText(Lang::get(QStringLiteral("ScanRangeTitle")));
+    m_labelAdapter->setText(Lang::get(QStringLiteral("AdapterLabel")));
+    m_buttonRefreshAdapter->setText(Lang::get(QStringLiteral("AdapterRefresh")));
+    // 重建下拉项（「自动选择」文案随语言变化），保留当前选中
+    refreshAdapterCombo(m_comboAdapter->currentData().toString());
     m_labelStartIp->setText(Lang::get(QStringLiteral("StartIp")));
     m_labelTo->setText(Lang::get(QStringLiteral("To")));
     m_labelEndIp->setText(Lang::get(QStringLiteral("EndIp")));
@@ -551,8 +617,15 @@ void MainWindow::switchToPage(int page)
     m_navHistory->setChecked(page == PageHistory);
     m_navSettings->setChecked(page == PageSettings);
 
-    if (page == PageHistory)
+    if (page == PageHome)
+    {
+        // 网卡可能在使用过程中插拔：切回首页时重新枚举一遍，保留当前选择
+        refreshAdapterCombo(m_comboAdapter->currentData().toString());
+    }
+    else if (page == PageHistory)
+    {
         m_pageHistory->reload();
+    }
 }
 
 void MainWindow::onHistoryRecordActivated(const ScanHistoryRecord &record)
@@ -578,6 +651,8 @@ void MainWindow::setScanningUiEnabled(bool scanning)
     m_buttonStop->setEnabled(scanning);
     m_buttonClear->setEnabled(!scanning);
     m_buttonExport->setEnabled(!scanning);
+    m_comboAdapter->setEnabled(!scanning);
+    m_buttonRefreshAdapter->setEnabled(!scanning);
     m_navSettings->setEnabled(!scanning);
 }
 
@@ -628,7 +703,9 @@ void MainWindow::onScanClicked()
     showProgressDialog();
 
     QString errorMessage;
-    if (!m_scanner->startIpRangeScan(startIp, endIp, &errorMessage))
+    // 网卡只影响本次扫描：传空串表示交给 nmap 按系统路由自动选择
+    const QString adapter = m_comboAdapter->currentData().toString();
+    if (!m_scanner->startIpRangeScan(startIp, endIp, adapter, &errorMessage))
     {
         const QString prefix = QString::fromLatin1(kTooManySubnetsPrefix);
         if (errorMessage.startsWith(prefix))
@@ -897,6 +974,10 @@ void MainWindow::onSettingsSaved()
     Lang::setCurrent(settings.language);
     m_scanner->setMaxParallelism(settings.scanThreads);
     m_scanner->setIpv6Enabled(settings.ipv6Enabled);
+    // 首页网卡下拉回到新保存的默认网卡，并把扫描范围切到该网段的 /24
+    m_defaultAdapter = settings.scanAdapter;
+    refreshAdapterCombo(m_defaultAdapter);
+    applyAdapterToRange();
     // 已打开的结果页签同步 IPv6 列的显示与导出行为
     for (int i = 0; i < m_tabControlResults->count(); ++i)
     {
