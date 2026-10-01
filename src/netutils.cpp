@@ -44,6 +44,9 @@
 #ifndef POLLWRNORM
 #define POLLWRNORM 0x0010
 #endif
+#ifndef POLLRDNORM
+#define POLLRDNORM 0x0100
+#endif
 
 namespace
 {
@@ -348,96 +351,92 @@ bool icmpPing(const QString &ip, int timeoutMs, qint64 *roundTripMs)
     return ok;
 }
 
-PortProbeResult probePorts(const QString &ip, const QVector<int> &ports, int totalBudgetMs)
+QByteArray tcpExchange(const QString &ip, int port, const QByteArray &request, int budgetMs)
 {
-    PortProbeResult result;
-    if (ports.isEmpty())
-        return result;
+    QByteArray response;
 
     sockaddr_in target;
     if (!buildSockAddr(ip, &target))
-        return result;
+        return response;
 
     ensureWinsock();
 
-    // 每个端口分配一个时间片，整体不超过 totalBudgetMs
-    const int budgetPerPort = qMax(1, totalBudgetMs / ports.size());
-    QElapsedTimer timer;
-    timer.start();
+    const SOCKET sock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sock == INVALID_SOCKET)
+        return response;
 
-    for (int port : ports)
+    u_long nonBlocking = 1;
+    if (ioctlsocket(sock, FIONBIO, &nonBlocking) != 0)
     {
-        const int remaining = totalBudgetMs - static_cast<int>(timer.elapsed());
-        if (remaining <= 0)
-            break;
-        const int portBudget = qMax(1, qMin(budgetPerPort, remaining));
+        ::closesocket(sock);
+        return response;
+    }
 
-        const SOCKET sock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        if (sock == INVALID_SOCKET)
-            break;
+    target.sin_port = htons(static_cast<u_short>(port));
 
-        target.sin_port = htons(static_cast<u_short>(port));
-
-        // 非阻塞 connect：连接成功与被拒绝都能给出确定性结论
-        u_long nonBlocking = 1;
-        if (ioctlsocket(sock, FIONBIO, &nonBlocking) != 0)
+    bool connected = ::connect(sock, reinterpret_cast<const sockaddr *>(&target), sizeof(target)) == 0;
+    if (!connected)
+    {
+        if (WSAGetLastError() != WSAEWOULDBLOCK)
         {
             ::closesocket(sock);
-            continue;
+            return response;
         }
 
-        // 0 = 不确定；>0 = 端口开放（值为端口号）；<0 = 主机在线（收到 RST，值为 -端口号）
-        int status = 0;
-        if (::connect(sock, reinterpret_cast<const sockaddr *>(&target), sizeof(target)) == 0)
+        WSAPOLLFD pollFd;
+        pollFd.fd = sock;
+        pollFd.events = POLLWRNORM;
+        pollFd.revents = 0;
+        if (WSAPoll(&pollFd, 1, budgetMs) <= 0)
         {
-            status = port;
-        }
-        else
-        {
-            const int lastError = WSAGetLastError();
-            if (lastError == WSAECONNREFUSED)
-            {
-                status = -port;
-            }
-            else if (lastError == WSAEWOULDBLOCK)
-            {
-                WSAPOLLFD pollFd;
-                pollFd.fd = sock;
-                pollFd.events = POLLWRNORM;
-                pollFd.revents = 0;
-
-                if (WSAPoll(&pollFd, 1, portBudget) > 0)
-                {
-                    int socketError = 0;
-                    int socketErrorSize = static_cast<int>(sizeof(socketError));
-                    if (getsockopt(sock, SOL_SOCKET, SO_ERROR,
-                                   reinterpret_cast<char *>(&socketError), &socketErrorSize) == 0)
-                    {
-                        if (socketError == 0)
-                            status = port; // 三次握手完成 → 端口开放
-                        else if (socketError == WSAECONNREFUSED)
-                            status = -port; // RST → 主机明确在线
-                    }
-                }
-            }
+            ::closesocket(sock);
+            return response;
         }
 
-        ::closesocket(sock);
-
-        if (status > 0)
+        int socketError = 0;
+        int socketErrorSize = static_cast<int>(sizeof(socketError));
+        if (getsockopt(sock, SOL_SOCKET, SO_ERROR, reinterpret_cast<char *>(&socketError),
+                       &socketErrorSize)
+                != 0
+            || socketError != 0)
         {
-            result.openPort = status;
-            result.hostAlive = true;
-            return result;
-        }
-        if (status < 0)
-        {
-            result.hostAlive = true;
-            return result;
+            ::closesocket(sock);
+            return response;
         }
     }
 
-    return result;
+    // 请求为空时只读服务端主动送出的内容（个别设备连上就推 banner）
+    if (!request.isEmpty()
+        && ::send(sock, request.constData(), static_cast<int>(request.size()), 0) <= 0)
+    {
+        ::closesocket(sock);
+        return response;
+    }
+
+    QElapsedTimer timer;
+    timer.start();
+    char buffer[2048];
+    while (response.size() < 8192)
+    {
+        const int remaining = budgetMs - static_cast<int>(timer.elapsed());
+        if (remaining <= 0)
+            break;
+
+        WSAPOLLFD pollFd;
+        pollFd.fd = sock;
+        pollFd.events = POLLRDNORM;
+        pollFd.revents = 0;
+        if (WSAPoll(&pollFd, 1, remaining) <= 0)
+            break;
+
+        const int received = ::recv(sock, buffer, static_cast<int>(sizeof(buffer)), 0);
+        if (received <= 0)
+            break;
+        response.append(buffer, received);
+    }
+
+    ::closesocket(sock);
+    return response;
 }
 
 QHash<QString, QString> readArpTable(int timeoutMs)

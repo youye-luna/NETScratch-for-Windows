@@ -3,7 +3,7 @@ build/
 release/
 *.exe
 *.zip
-installer/NETScratch.iss
+!installer/npcap-1.88.exe
 
 ## IDE
 .vs/

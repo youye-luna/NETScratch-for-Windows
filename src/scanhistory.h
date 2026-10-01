@@ -39,9 +39,6 @@ struct ScanHistoryRecord
 /// 文件名格式：2026年08月05日 192.168.1.1~192.168.1.254（IP）.csv
 namespace ScanHistoryStore
 {
-/// 历史目录
-QString historyDir();
-
 /// 加载全部历史记录（按时间倒序，并按当前保存配置清理过期记录）
 QVector<ScanHistoryRecord> load();
 

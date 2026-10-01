@@ -102,12 +102,6 @@ ScanWorker::ScanWorker(const QStringList &ipList, int maxParallelism, bool ipv6E
 {
 }
 
-void ScanWorker::requestCancel()
-{
-    if (!m_token.isNull())
-        m_token->cancel();
-}
-
 void ScanWorker::run()
 {
     try
@@ -147,7 +141,25 @@ void ScanWorker::run()
             return;
         }
 
-        // 3) 并发补齐 nmap 未提供的主机名 / MAC / DHCP 判定（进度占后 50%）
+        // 3) 组播发现（SSDP / mDNS）：为「一个端口都不开的家用 P2P 摄像头」收集线索。
+        //    这一步只在这里跑一次，结果按 IP 存表，供后面的并发识别只读查询。
+        //    进度停在 50%，不参与进度公式。
+        {
+            const QString localIp = NetUtils::localIpv4Address();
+            if (!localIp.isEmpty())
+            {
+                m_hints = QSharedPointer<const QHash<QString, DiscoveryHint>>::create(
+                    NetDiscovery::discover(localIp, 1500, m_token.data()));
+            }
+        }
+
+        if (!m_token.isNull() && m_token->isCancelled())
+        {
+            emit cancelled();
+            return;
+        }
+
+        // 4) 并发补齐 nmap 未提供的主机名 / MAC / DHCP 判定（进度占后 50%）
         QVector<DhcpServerInfo> collected;
         collected.reserve(verifiedHosts.size());
         for (const NmapHost &host : verifiedHosts)
@@ -215,7 +227,7 @@ void ScanWorker::run()
             return;
         }
 
-        // 4) 为本次扫描过但未发现设备的地址补一条「无设备」记录。
+        // 5) 为本次扫描过但未发现设备的地址补一条「无设备」记录。
         //    nmap 只返回在线主机，若不补齐，IP 分布图里这些地址会保持默认底色，
         //    与图例中「未扫描」的颜色相同，无法区分。
         {
@@ -270,11 +282,20 @@ void ScanWorker::enrichHost(DhcpServerInfo &info) const
 
     info.isDhcpServer = isLikelyRouterOrDhcp(info.ipAddress, info.hostName);
 
-    // 摄像头识别（RTSP / Web 指纹 / 厂商端口 / MAC 前缀 / 主机名综合打分）
-    const CameraDetection camera =
-        CameraDetector::detect(info.ipAddress, info.macAddress, info.hostName);
+    // 摄像头识别（RTSP / Web 指纹 / 厂商端口 / MAC 厂商 / 主机名 / 组播线索综合打分）
+    const CameraDetection camera = CameraDetector::detect(
+        info.ipAddress, info.macAddress, info.hostName, hintFor(info.ipAddress));
     info.isCamera = camera.isCamera;
     info.cameraEvidence = camera.evidence;
+}
+
+const DiscoveryHint *ScanWorker::hintFor(const QString &ip) const
+{
+    if (m_hints.isNull())
+        return nullptr;
+
+    const auto it = m_hints->constFind(ip);
+    return it == m_hints->constEnd() ? nullptr : &it.value();
 }
 
 void ScanWorker::applyArpResults(QVector<DhcpServerInfo> &results) const
@@ -323,7 +344,8 @@ void ScanWorker::applyArpResults(QVector<DhcpServerInfo> &results) const
                 fixData[k].hostName = queryHostName(ip);
                 fixData[k].isDhcpServer = isLikelyRouterOrDhcp(ip, fixData[k].hostName);
 
-                const CameraDetection camera = CameraDetector::detect(ip, mac, fixData[k].hostName);
+                const CameraDetection camera =
+                    CameraDetector::detect(ip, mac, fixData[k].hostName, hintFor(ip));
                 fixData[k].isCamera = camera.isCamera;
                 fixData[k].cameraEvidence = camera.evidence;
 

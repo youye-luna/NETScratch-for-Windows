@@ -17,6 +17,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QHash>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -106,6 +107,41 @@ QVector<NmapHost> parseXml(const QByteArray &xml, bool *parsed)
     *parsed = !reader.hasError();
     return hosts;
 }
+
+/// 把 Npcap 设备名（\Device\NPF_{GUID}）翻译成 nmap 认识的名字。
+/// nmap 的 -e 只接受 `nmap --iflist` 里 DEV 那一列的短名（eth0 / eth1 …）；
+/// 直接传 \Device\NPF_{GUID} 会让 nmap 立刻报
+/// “I cannot figure out what source address to use for device …, does it even exist?” 并退出。
+/// 映射表随网卡热插拔变化，因此只在命中缓存时复用，未命中时重新枚举一次。
+QString nmapShortDeviceName(const QString &exePath, const QString &device)
+{
+    if (device.isEmpty() || exePath.isEmpty())
+        return QString();
+
+    static QHash<QString, QString> cache;
+    const auto cached = cache.constFind(device);
+    if (cached != cache.constEnd())
+        return cached.value();
+
+    QProcess process;
+    process.setProcessChannelMode(QProcess::MergedChannels);
+    process.start(exePath, {QStringLiteral("--iflist")}, QIODevice::ReadOnly);
+    if (!process.waitForStarted(kFinishTimeoutMs) || !process.waitForFinished(kFinishTimeoutMs))
+        return QString();
+
+    const QString output = QString::fromLatin1(process.readAll());
+    for (const QString &line : output.split(QLatin1Char('\n'), Qt::SkipEmptyParts))
+    {
+        const QStringList fields =
+            line.split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
+        if (fields.size() != 2 || !fields.at(1).startsWith(QLatin1String("\\Device\\NPF_")))
+            continue; // 只取 “DEV  WINDEVICE” 那张表
+        if (fields.at(0) != QLatin1String("<none>"))
+            cache.insert(fields.at(1), fields.at(0));
+    }
+
+    return cache.value(device);
+}
 } // namespace
 
 QString NmapRunner::findNmapExecutable()
@@ -156,11 +192,14 @@ QVector<NmapHost> NmapRunner::scanHosts(const QStringList &ipList, const QString
         QStringLiteral("-iL"), QStringLiteral("-")};  // 目标列表从标准输入读取，避免命令行过长
 
     // 指定出口网卡：仅在「选中了网卡」且本机装有 Npcap 时才加 -e。
-    // 未装 Npcap 时 nmap 走 connect 模式，-e 无效甚至报错，此时保持原行为交给 nmap 自动选卡
-    const QString device = NetUtils::npcapDeviceName(adapterName);
-    if (!device.isEmpty() && NetUtils::isNpcapAvailable())
+    // 未装 Npcap 时 nmap 走 connect 模式，-e 无效甚至报错，此时保持原行为交给 nmap 自动选卡。
+    // 注意：必须用 nmap 的短设备名（eth0/eth1…），不能传 Npcap 设备名。
+    QString shortDevice;
+    if (NetUtils::isNpcapAvailable())
+        shortDevice = nmapShortDeviceName(exePath, NetUtils::npcapDeviceName(adapterName));
+    if (!shortDevice.isEmpty())
     {
-        arguments.insert(1, device);
+        arguments.insert(1, shortDevice);
         arguments.insert(1, QStringLiteral("-e"));
     }
 

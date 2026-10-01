@@ -389,11 +389,6 @@ DhcpServerInfo ScanHistoryDevice::toServerInfo() const
 namespace ScanHistoryStore
 {
 
-QString historyDir()
-{
-    return historyDirPath();
-}
-
 QVector<ScanHistoryRecord> load()
 {
     if (AppSettings::load().historySaveMode == HistorySaveMode::None)

@@ -25,7 +25,6 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
 
 private:
-    static int cellTotal();
     static int rowTotal();
 
     int cellSize() const;

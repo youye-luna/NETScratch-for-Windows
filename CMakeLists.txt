@@ -45,6 +45,9 @@ set(PROJECT_SOURCES
     src/cameradetector.h
     src/cameradetector.cpp
 
+    src/netdiscovery.h
+    src/netdiscovery.cpp
+
     src/scanner.h
     src/scanner.cpp
 
@@ -120,14 +123,14 @@ if(EXISTS "${NMAP_DIST_DIR}/nmap.exe")
         "${NMAP_VCRUNTIME_DIR}/VCRUNTIME140.dll"
         "${NMAP_DIST_DIR}/nmap-services"
         "${NMAP_DIST_DIR}/nmap-protocols"
-        "${NMAP_DIST_DIR}/nmap-rpc"
         "${NMAP_DIST_DIR}/nmap-mac-prefixes"
-        "${NMAP_DIST_DIR}/nmap-os-db"
-        "${NMAP_DIST_DIR}/nmap-service-probes"
-        "${NMAP_DIST_DIR}/nse_main.lua"
         "${NMAP_DIST_DIR}/LICENSE"
         "${NMAP_DIST_DIR}/3rd-party-licenses.txt"
     )
+    # 不随包分发 nmap-os-db / nmap-service-probes / nse_main.lua / nmap-rpc：
+    # 这些只在 -O（系统识别）/ -sV（版本探测）/ -sC（NSE 脚本）/ -sR（RPC）时才会读取，
+    # 本程序固定用 `nmap -sn` 做主机发现（实测去掉后扫描、ARP、MAC 厂商均正常），
+    # 去掉可省约 8 MB。
 
     list(APPEND NMAP_DEPLOY_COMMANDS
         COMMAND ${CMAKE_COMMAND} -E make_directory "${_NMAP_DST_DIR}"
@@ -143,7 +146,7 @@ if(EXISTS "${NMAP_DIST_DIR}/nmap.exe")
         message(WARNING "未找到 ${NMAP_UCRT_DIR}，Win7 上 nmap 可能因缺少 UCRT 而无法运行")
     endif()
 
-    foreach(_nmap_dir scripts nselib licenses)
+    foreach(_nmap_dir licenses)
         if(EXISTS "${NMAP_DIST_DIR}/${_nmap_dir}")
             list(APPEND NMAP_DEPLOY_COMMANDS
                 COMMAND ${CMAKE_COMMAND} -E copy_directory

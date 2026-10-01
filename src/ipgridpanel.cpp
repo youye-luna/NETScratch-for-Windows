@@ -46,8 +46,6 @@ IPGridPanel::IPGridPanel(QWidget *parent)
     updateScrollRange();
 }
 
-int IPGridPanel::cellTotal() { return kTotalCells; }
-
 int IPGridPanel::rowTotal() { return (kTotalCells + kCols - 1) / kCols; }
 
 int IPGridPanel::cellSize() const

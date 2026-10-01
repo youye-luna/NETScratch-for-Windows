@@ -42,7 +42,6 @@ IpAddressEdit::IpAddressEdit(QWidget *parent)
                     // 输满 3 位自动跳到下一段
                     if (text.size() >= kMaxSegmentLength && i != kSegmentCount - 1)
                         focusSegment(i + 1);
-                    emit addressChanged();
                 });
         m_segments[i] = segment;
         layout->addWidget(segment, 1);

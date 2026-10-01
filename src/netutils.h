@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QHash>
 #include <QString>
 #include <QVector>
@@ -19,15 +20,9 @@ bool isPrivateIp(const QString &ip);
 /// ICMP 探测：成功返回 true 并写入往返毫秒数
 bool icmpPing(const QString &ip, int timeoutMs, qint64 *roundTripMs);
 
-/// 端口探测的确定性结果
-struct PortProbeResult
-{
-    int openPort = -1;    ///< 探测到的第一个开放端口，无则 -1
-    bool hostAlive = false; ///< 主机在线（连接被拒绝即认为在线）
-};
-
-/// 在总时间预算内按顺序探测端口，返回第一个确定性结果
-PortProbeResult probePorts(const QString &ip, const QVector<int> &ports, int totalBudgetMs);
+/// 与指定 TCP 端口做一次短交互：连接后发送 request，读到无数据或超时为止。
+/// 连接/发送失败返回空。用于 RTSP、HTTP、UPnP 等文本协议的一次性握手。
+QByteArray tcpExchange(const QString &ip, int port, const QByteArray &request, int budgetMs);
 
 /// arp -a 全表，返回 IP -> MAC（AA-BB-CC-DD-EE-FF 大写）
 QHash<QString, QString> readArpTable(int timeoutMs = 1500);

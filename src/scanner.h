@@ -2,6 +2,7 @@
 
 #include <QAtomicInt>
 #include <QDateTime>
+#include <QHash>
 #include <QMetaType>
 #include <QObject>
 #include <QSharedPointer>
@@ -9,6 +10,8 @@
 #include <QStringList>
 #include <QThread>
 #include <QVector>
+
+#include "netdiscovery.h"
 
 /// 单个扫描结果
 struct DhcpServerInfo
@@ -49,10 +52,7 @@ public:
                const QString &adapterName, const QSharedPointer<ScanCancelToken> &token,
                QObject *parent = nullptr);
 
-    /// 请求取消（线程安全）
-    void requestCancel();
-
-signals:
+    signals:
     void progressChanged(int percent);
     void completed(const QVector<DhcpServerInfo> &results);
     void failed(const QString &message);
@@ -65,6 +65,8 @@ private:
     /// 补齐 nmap 未提供的信息（主机名 / MAC / 是否为 DHCP 服务器）
     void enrichHost(DhcpServerInfo &info) const;
     void applyArpResults(QVector<DhcpServerInfo> &results) const;
+    /// 取某个 IP 的组播发现线索，没有返回 nullptr
+    const DiscoveryHint *hintFor(const QString &ip) const;
     /// 预热扫描网段所在网卡的 IPv6 邻居表（向 ff02::1 发回显）
     void prepareIpv6Neighbors() const;
     /// 按 MAC 从 IPv6 邻居表回填 ipv6Address
@@ -80,6 +82,8 @@ private:
     /// 指定扫描用的网卡（适配器 GUID）；为空表示交给 nmap 自动选卡
     QString m_adapterName;
     QSharedPointer<ScanCancelToken> m_token;
+    /// 本次扫描收集到的组播发现线索（IP -> 线索）；并发识别时只读共享
+    QSharedPointer<const QHash<QString, DiscoveryHint>> m_hints;
 };
 
 /// 局域网 IP 段 + DHCP 服务器扫描器（对外接口）

@@ -23,9 +23,6 @@ public:
 
     QSize sizeHint() const override;
 
-signals:
-    void addressChanged();
-
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
